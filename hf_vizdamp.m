@@ -7,6 +7,13 @@
 %   3) ensnums to average over
 %   4) bounding box of map
 
+
+% Dependencies
+% lon360to180.m
+% findcoords.m
+
+
+
 %% ------------------------------
 %  User Input
 %  ------------------------------
@@ -18,12 +25,12 @@ monlist   = [12]       ; %List of months to visualize
 avgmon    = 0          ; %Set 1 to average across all months in monlist
 lag       = [1:2]      ; %List of lags to average over/sum over
 ensnum    = [1:42]     ; %List of ensemble members to average over
-monwin    = 3          ; %Months considered (1mon vs 3mon)
+monwin    = 1          ; %Months considered (1mon vs 3mon)
 ensorem   = 1          ; %Set to 1 if enso was removed
 savedamp  = 0          ; % Set to 1 to save damping variables after applying sigtest
-mode      = 4          ; % (1) Apply no Mask, (2) Apply SST (3) Flx (4) Both
+mode      = 4          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (4) Both
 ensavgf   = 1          ; %Set to 1 if you want to take the ensemble average first
-lag1_elim = 0          ;% Set to 1 to eliminate rest of lags if lag 1 fails
+lag1_elim = 1          ;% Set to 1 to eliminate rest of lags if lag 1 fails
 insigNaN  = 0          ;% Set to 1 to change insignificant feedbacks to NaN
 %(3) to msk cor, (4) for both, (5) for old threshold, (6) for custom
 %threshold
@@ -42,7 +49,7 @@ dof_man  = 82            ; % Manual DOF value
 plotpt = 1;
 lon_find = -72;
 lat_find = 35;
-caxischoose = [-100 100];% Good caxis threshold for THFLX, noisy pixel id
+caxischoose = [-50 50];% Good caxis threshold for THFLX, noisy pixel id
 
 % -------------------
 % Plot Opt
@@ -54,14 +61,17 @@ plot_lagmap = 0; % Set to 1 to create plot of lags removed
 plot_mask   = 0;
 
 % Set Paths
-%outpath  = '/Users/gyl/Downloads/02_Research/02_Figures/20200109/';
-outpath  = '/Users/gyl/Downloads/02_Research/02_Figures/20200520/';
-datpath  = '/Users/gyl/Downloads/02_Research/01_Data/AMV_hfdamping/';
+projpath = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/';
+outpath  = [projpath,'02_Figures/20200522/'];
+datpath  = [projpath,'01_Data/'];
+
+% Add Paths
+addpath(datpath) % Path to data
+addpath('/Users/gliu/') % Path to scripts
 
 % Load data
-load(['alldamping_nhflx_',num2str(monwin),'mo.mat']);
-load('CESM1_LATLON.mat');
-load('old_sigthres_0125.mat')
+load(strcat(datpath,['alldamping_nhflx_monwin',num2str(monwin),'.mat']))
+load('CESM1_LATLON.mat')
 
 % Bounding Boxes (lon1 lon2 lat1 lat2)
 bbox         = [-100 20 -25 75]; % North Atlantic
@@ -72,9 +82,10 @@ figtype = 0;
 % Other Settings
 mnum = [1:35,101:107] ;%All ensemble members
 
-%% ------------------------------
+startup
+%% ------------------------------------------------------------------------
 %  Script Start
-%  ------------------------------
+
 
 %% -------------------------------------------
 %  Prepare Figure Labels
@@ -134,7 +145,7 @@ for i = 1:length(fluxes)
             msst = rsst   > corrthres;
             mflx = rnhflx > corrthres;
         elseif monwin == 1
-            msst = permute(rsst_old,[1,2,5,3,4]) > corrthres;
+            msst = rsst   > corrthres;
             mflx = rnhflx > corrthres;
         end
         
