@@ -18,7 +18,7 @@
 %
 
 %% User Input ------------
-vars    = {'NHFLX'}; % Note, remove SST calculation
+vars    = {'LHFLX','SHFLX','FLNS','FSNS'}; % Note, remove SST calculation
 net     = 1             ; % Set to 1 to just calculate NHFLX
 lags    = [1:3]         ;% Lag between variable and SST [1,2,3]
 monwin  = 3             ;
@@ -32,7 +32,8 @@ pval     = 0.05          ; % p-value that will be used
 dof_type = 4             ; % Type of edof used
 ensorem  = 1             ; % 1 = use variables with enso rem
 tails    = 2             ; % 1 or 2-tailed T-test
-dof_man  = 84            ; % Manual DOF value
+dof_man  = 82            ; % Manual DOF value
+
 % Path to data (monthly folder before the variable addition)
 if ensorem == 1
     datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/02_hf2out/ensorem/';
@@ -50,8 +51,8 @@ mnum  = [1:35,101:107];% Ensemble Members List
 % Toggles
 savedamping = 1;% Set to 1 to save damping coefficients
 savecov     = 0;% Set to 1 to save covariance and autocov
-savecorr    = 0;% Set to 1 to save significance test results (rsst)
-saverho     = 0;% Set to 1 to save map of correlation coefficients
+savecorr    = 1;% Set to 1 to save significance test results (rsst)
+saverho     = 1;% Set to 1 to save map of correlation coefficients
 %% -----------------------------------------------------------------------
 %  Script Start/Setup
 %  -----------------------------------------------------------------------
