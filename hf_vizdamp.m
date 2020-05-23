@@ -11,7 +11,7 @@
 % Dependencies
 % lon360to180.m
 % findcoords.m
-
+% m_map
 
 
 %% ------------------------------
@@ -23,15 +23,15 @@ fluxes   = {'nhflx'}  ; %Flux to Visualize
 lonremap  = 1          ; %Set 1 to remap LON from 360 -> -180 (Change [bbox] acc.)
 monlist   = [12]       ; %List of months to visualize
 avgmon    = 0          ; %Set 1 to average across all months in monlist
-lag       = [1:2]      ; %List of lags to average over/sum over
+lag       = [1]      ; %List of lags to average over/sum over
 ensnum    = [1:42]     ; %List of ensemble members to average over
 monwin    = 1          ; %Months considered (1mon vs 3mon)
 ensorem   = 1          ; %Set to 1 if enso was removed
 savedamp  = 0          ; % Set to 1 to save damping variables after applying sigtest
-mode      = 4          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (4) Both
+mode      = 2          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (4) Both
 ensavgf   = 1          ; %Set to 1 if you want to take the ensemble average first
-lag1_elim = 1          ;% Set to 1 to eliminate rest of lags if lag 1 fails
-insigNaN  = 0          ;% Set to 1 to change insignificant feedbacks to NaN
+lag1_elim = 0          ;% Set to 1 to eliminate rest of lags if lag 1 fails
+insigNaN  = 1          ;% Set to 1 to change insignificant feedbacks to NaN
 %(3) to msk cor, (4) for both, (5) for old threshold, (6) for custom
 %threshold
 
@@ -39,7 +39,7 @@ insigNaN  = 0          ;% Set to 1 to change insignificant feedbacks to NaN
 % MODE6: SET SIGNIFICANCE TESTING OPTIONS
 % -------------------
 % T-Test parameters
-p        = 0.05          ; % p-value that will be used
+p        = 0.05         ; % p-value that will be used
 tails    = 2             ; % 1 or 2-tailed T-test
 dof_man  = 82            ; % Manual DOF value
 
@@ -49,12 +49,12 @@ dof_man  = 82            ; % Manual DOF value
 plotpt = 1;
 lon_find = -72;
 lat_find = 35;
-caxischoose = [-50 50];% Good caxis threshold for THFLX, noisy pixel id
+caxischoose = [-100 100];% Good caxis threshold for THFLX, noisy pixel id
 
 % -------------------
 % Plot Opt
 % -------------------
-plot_allens = 0; % Set to 1 to create separate plot for all ens members
+plot_allens = 1; % Set to 1 to create separate plot for all ens members
 plot_ensavg = 1; % Set to 1 to create plot of ensemble average
 plot_oneens = 0; 
 plot_lagmap = 0; % Set to 1 to create plot of lags removed
@@ -92,13 +92,13 @@ startup
 %  -------------------------------------------           
 % Labeling Options (Detect if AVG or Single)
 if length(ensnum) > 1
-    stensnum = 'AVG';
+    stensnum = 'Avg';
 else
     stensnum  = num2str(ensnum,'%03d');
 end
 
 if length(lag) > 1
-    stlag = 'AVG';
+    stlag = 'Avg';
 else
     stlag = num2str(lag);
 end
@@ -331,6 +331,7 @@ for i = 1:length(fluxes)
                     '_monwin',num2str(monwin),...
                     '_ensorem',num2str(ensorem),...
                     '_mode',num2str(mode),...
+                    '_sig',num2str(p*100,'%03d'),...
                     '.png'];       
             else
                 figname = [outpath,fluxlab,'damping_mo',num2str(imon,'%02d'),...
@@ -339,10 +340,14 @@ for i = 1:length(fluxes)
                     '_monwin',num2str(monwin),...
                     '_ensorem',num2str(ensorem),...
                     '_mode',num2str(mode),...
+                    '_sig',num2str(p*100,'%03d'),...
                     '.png'];
             end
-            sgtitle([fluxlab,' Damping; Month ',num2str(imon),'; Lag ',stlag, '; Monthwin ',num2str(monwin),'; ENSOrem ',num2str(ensorem)],...
-                'FontSize',20);
+
+            sgtitle(strcat(fluxlab,' Damping; Mon ',num2str(imon,'%02d'),...
+                '; Lag ',stlag,...
+                '; Ens  ',stensnum),...
+                    'FontSize',20);
             saveas(gcf,figname,'png')   
             fprintf('\nCompleted month %s',num2str(imon,'%02d'))
             % End conditional for plot allens
@@ -353,29 +358,35 @@ for i = 1:length(fluxes)
         %  ----------------------------------------
         if plot_ensavg == 1   
             figure(12+m)
+            clf
             m_proj('Miller','long',[bbox(1) bbox(2)],'lat',[bbox(3)  bbox(4)]) 
             set(gca,'Color','k')
             m_pcolor(LON1,LAT,ensavg')
             colormap(m_colmap('diverging',11));
             caxis(caxischoose)
-            colorbar('Location','southoutside')
+            
+            cints=(caxischoose(2) - caxischoose(1))/10
+            [tn,tl] = divergingticks(caxischoose,11,cints)
+            
+            
+            colorbar('Location','southoutside','Ticks',tn,'TickLabels',tl)
+           
             m_coast('patch',[.7, .7, .7], 'edgecolor','black');
             m_grid('tickdir','out','linewi',2,'backgroundcolor','g');
             pval = ensavg(oidx,aidx);
             
             if plot_oneens == 1
-                st_ensnum = num2str(ensnum(1),'%02d');
+                stensnum = num2str(ensnum(1),'%02d');
 
-            else
-                st_ensnum = "AVG";
             end
             
             figname = strcat(outpath,fluxlab,'damping_mon',num2str(imon,'%02d'),...
                     '_lag',stlag,...
-                    '_ens',st_ensnum,...
+                    '_ens',stensnum,...
                     '_monwin',num2str(monwin),...
                     '_ensorem',num2str(ensorem),...
                     '_mode',num2str(mode),...
+                    '_sig',num2str(p*100,'%03d'),...
                     '.png');
             % Add Point Marker
             hold on
@@ -386,16 +397,14 @@ for i = 1:length(fluxes)
                 m_plot(midptx,midpty,'yo',...
                     'MarkerSize',25,'MarkerEdgeColor','y')
                 
-                title({strcat(fluxlab,' Damping for Month ',num2str(imon,'%02d'),...
-                    ' Lag ',stlag,...
-                    ' ENSNUM ',st_ensnum,...
-                    ' ENSOREM ',num2str(ensorem));['Corr. Thres: ',num2str(corrthres,'%.04f'),'; Pt Value: ',num2str(pval,'%.02f')]},...
+                title({strcat(fluxlab,' Damping; Mon ',num2str(imon,'%02d'),...
+                    '; Lag ',stlag,...
+                    '; Ens  ',stensnum);['Corr. Thres: ',num2str(corrthres,'%.04f'),'; Pt Value: ',num2str(pval,'%.02f')]},...
                     'FontSize',16)
             else
-                title({strcat(fluxlab,' Damping for Month ',num2str(imon,'%04d'),...
-                    ' Lag ',stlag,...
-                    ' ENSNUM ',st_ensnum,...
-                    ' ENSOREM ',num2str(ensorem));['Corr. Thres: ',num2str(corrthres,'%.04f')]},...
+                title({strcat(fluxlab,' Damping; Mon ',num2str(imon,'%02d'),...
+                    '; Lag ',stlag,...
+                    '; Ens  ',stensnum)},...
                     'FontSize',16)
             end
             saveas(gcf,figname,'png')
