@@ -17,12 +17,12 @@
 % 2. outfile2 - covariance for each flux and SST autocovariance
 %
 
+% Note: All the files are automatically stacked into the same file.
 %% User Input ------------
-vars    = {'LHFLX','SHFLX','FLNS','FSNS'}; % Note, remove SST calculation
-net     = 1             ; % Set to 1 to just calculate NHFLX
-lags    = [1:3]         ;% Lag between variable and SST [1,2,3]
-monwin  = 3             ;
-skipto  = 1             ; %
+vars    = {'LHFLX','SHFLX','FLNS','FSNS','RHFLX','THFLX','NHFLX'}; % Note, remove SST calculation
+lags    = [1:3]         ; % Lag between variable and SST [1,2,3]
+monwin  = 3             ; % Months to include (ex: 1 = D, 3 = "NDJ")
+skipto  = 1             ; % Skip to specific member
 stopat  = 43            ; % Stop Iteration at given number
 timerng = 1921:2004     ; % Range of Years to Include
 startyr = 1921          ; %
@@ -49,17 +49,18 @@ outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdampin
 mnum  = [1:35,101:107];% Ensemble Members List
 
 % Toggles
-savedamping = 1;% Set to 1 to save damping coefficients
+savedamping = 1;% Set to 1 to save damping values
 savecov     = 0;% Set to 1 to save covariance and autocov
-savecorr    = 1;% Set to 1 to save significance test results (rsst)
-saverho     = 1;% Set to 1 to save map of correlation coefficients
+savetest    = 0;% Set to 1 to save significance test results (rsst)
+saverho     = 1;% Set to 1 to save map of cross-correlation coefficients
+savesst     = 0;% Set to 1 to save SST autcorrelation
 %% -----------------------------------------------------------------------
 %  Script Start/Setup
 %  -----------------------------------------------------------------------
 
 allstart = datetime('now');
 fprintf('Now running hf3_dampingcalc (%s)',allstart)
-fprintf('\n Save Options -- Damping:%i | Cov/AutoCov:%i | Corr/Pval:%i',savedamping,savecov,savecorr)
+fprintf('\n Save Options -- Damping:%i | Cov/AutoCov:%i | SigTest:%i | Corr:%i | SST:%i',savedamping,savecov,savetest,saverho,savesst)
 fprintf('\n\t Save Loc: %s',outpath)
 
 % Load startup
@@ -77,16 +78,22 @@ elseif monwin == 1
 end
 
 % Preallocate Arrays for SST autocorrelation 
-if savecorr == 1
+if savesst == 1
+    % Preallocate for SST Autocorrelation Testing Results
+    if savetest == 1
+        sigval    = NaN(1,  length(vars)+1)       ; % Critical Correlation Value
+        st_aut    = NaN(288,192,12,length(lags))  ; % Significance Test Result
+    end
+    
+    % Preallocate for SST Autocorrelation Coefficients
     if saverho == 1
           rho_aut   = NaN(288,192,12,length(lags))  ; % Correlation Coefficient
     end
-    st_aut    = NaN(288,192,12,length(lags))  ; % Significance Test Result
-    sigval    = NaN(1,  length(vars)+1)                        ; % Critical Correlation Value
 end
-    
+
 % Loop by ensemble member
 for n = 1:length(mnum)
+    
     % Skip to specific ensemble member if option is set
     if n < skipto
         continue
@@ -97,6 +104,7 @@ for n = 1:length(mnum)
         fprintf('\nStopping now at %i (%s)',stopat,datetime('now'))
         break
     end
+    
     
     nstart = datetime('now');
     ensnum = mnum(n);
@@ -137,13 +145,16 @@ for n = 1:length(mnum)
         vname = char(vars(v));
         
         % Preallocate arrays for cross correlation
-        if savecorr == 1
-            rho_cov   = NaN(288,192,12,length(lags))  ; % Correlation Coefficient
-            %T_cov     = NaN(288,192,12,length(lags),length(mnum))  ; % T Critical Values
+        if savetest == 1       
             st_cov     = NaN(288,192,12,length(lags))  ; % Significance Test Result 
         end
         
-        % Note: load in and sum fluxes
+        % Preallocate arrays for cross-corr coefficients
+        if saverho == 1
+            rho_cov   = NaN(288,192,12,length(lags))  ; % Correlation Coefficient
+        end
+        
+        % Note: load in and sum fluxes (if NHFLX RHFLX or THFLX)
         if strcmp(vname,'NHFLX') == 1
             flx = NaN(12,84,288,192,4);
             for vi = 1:4
@@ -333,29 +344,37 @@ for n = 1:length(mnum)
                 %% ---------------------------------------------
                 %  Compute Correlation Coefficients and P Values
                 %  ---------------------------------------------
-                if savecorr == 1
-                    
+                
+                % Cross Correlation Testing
+                if savetest == 1             
                     % Compute cross correlation coefficients and test
                     % results
-                    [cc_rho,~,cc_test,~,~,cc_thres] = pcorr(flx2d,sstlag2d,1,pval,tails,dof_type,dof_man);
+                    [~,~,cc_test,~,~,cc_thres] = pcorr(flx2d,sstlag2d,1,pval,tails,dof_type,dof_man);
                     
-                    % Store values
-                    rho_cov(:,:,m,l)     = reshape(cc_rho,288,192);
+                    % Store values        
                     st_cov(:,:,m,l)      = reshape(cc_test,288,192);
                     sigval(1,v)              = cc_thres;
-
-                    % ------------------------------------------
-                    % On first iteration, do SST autocorrelation
-                    % ------------------------------------------
-                    if v == 1
-                        % Just output correlation matrix and ac_test results
-                        [ac_rho,~,ac_test,~,~,ac_thres]    = pcorr(sst2d,sstlag2d,1,pval,tails,dof_type,dof_man);
-                        
-                        % [~,~,oac_test,~,~,oac_thres]    = pcorr(sst2d,sstlag2d,1,pval,tails,1,dof_man);
-                        % Store results
-                        rho_aut(:,:,m,l)     = reshape(ac_rho,288,192);
+                end
+                
+                % Cross Correlation Coefficients
+                if saverho == 1
+                    [cc_rho,~,~,~,~,~] = pcorr(flx2d,sstlag2d,1,pval,tails,dof_type,dof_man);
+                    rho_cov(:,:,m,l)     = reshape(cc_rho,288,192);
+                end
+                
+                % ---------------------------------------------------------
+                % SST Autocorrelation: Do on first iteration if opt is set
+                % ---------------------------------------------------------
+                if savesst == 1 && v == 1
+                    if savetest == 1
+                        [~,~,ac_test,~,~,ac_thres]    = pcorr(sst2d,sstlag2d,1,pval,tails,dof_type,dof_man);
                         st_aut(:,:,m,l)        = reshape(ac_test,288,192);
                         sigval(1,length(vars)+1) = ac_thres;
+                    end
+                    
+                    if saverho == 1
+                        [ac_rho,~,~,~,~,~]    = pcorr(sst2d,sstlag2d,1,pval,tails,dof_type,dof_man);
+                        rho_aut(:,:,m,l)     = reshape(ac_rho,288,192);
                     end
                 end
                 
@@ -413,7 +432,7 @@ for n = 1:length(mnum)
             eval([vname,'_cov =covall;'])
         end
         
-        if savecorr == 1
+        if savetest == 1
             eval([vname,'_test =st_cov;'])  
         end
         
@@ -421,20 +440,19 @@ for n = 1:length(mnum)
             eval([vname,'_rho =rho_cov;']) 
         end
         
-        % Only Store SST values on the first loop
-        if v == 1
+        % Only Store SST values on the first loop    
+        if savesst == 1 && v == 1
             if savecov == 1
                 eval(['SST_aut =autall;'])
             end
             
-            if savecorr == 1
+            if savetest == 1
                 eval(['SST_test = st_aut;'])  
             end
             
             if saverho == 1
                 eval(['SST_rho = rho_aut;'])  
-            end
-                
+            end     
         end
             
         % End loop for variable
@@ -442,35 +460,84 @@ for n = 1:length(mnum)
     
     % Save damping variables
     if savedamping == 1
-        if net == 1
-            outname1 = [outpath,'nhfdamping_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
-            save(outname1,'NHFLX_damping')
-        else 
-            outname1 = [outpath,'hfdamping_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
-            save(outname1,'LHFLX_damping','SHFLX_damping','FLNS_damping','FSNS_damping')
-        end
+        
+        % Make cell array of names
+        dampnames = strcat(vars,'_damping');
+        
+        
+        % Save (ex: hfdamping_ENS001_ensorem1_monwin1.mat)
+        outname1 = [outpath,'hfdamping_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
+        save(outname1,dampnames{:})
+        
     end
     
     % Save intermediary covariance/autocovariance variables
     if savecov == 1
+        
+        % Get variable names
+        covnames = strcat(vars,'_cov');
+        
+        % Save (ex: covars_ENS002_ensorem1.mat)
     	outname2 = [outpath,'covars_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'.mat'];  
         save(outname2,'LHFLX_cov','SHFLX_cov','FSNS_cov','FLNS_cov','SST_aut')
+        
     end
     
     % Save correlation and pvalues
-    if savecorr == 1
-        if net == 1
-            outname3 = [outpath,'ncorr_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];           
-            save(outname3,'NHFLX_test','sigval','SST_test','NHFLX_rho','SST_rho')
-        else
-            outname3 = [outpath,'corr_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];  
-    %         save(outname3,'LHFLX_T','LHFLX_test','SHFLX_T','SHFLX_test','FSNS_T','FSNS_test',...
-    %             'FLNS_T','FLNS_test','SST_T','SST_test')
-            % Currently just set to output the significance test results
-            save(outname3,'LHFLX_test','SHFLX_test','FSNS_test',...
-                'FLNS_test','SST_test','sigval')
-        end
+    if savetest == 1
+        
+        % Get variable names and add significance testing value
+        testnames = strcat(vars,'_test');
+        testnames{end+1} = 'sigval';
+        
+        % ex: (test_ENS001_ensorem1_monwin1.mat)
+        outname3 = [outpath,'test_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
+        save(outname3,testnames{:})
+        
+       
     end
+    
+    
+    % (4) Save Correlation Coefficients
+    if saverho == 1
+        
+        % Get variable names
+        rhonames = strcat(vars,'_rho');
+        
+        % Save (ex: corrENS_ensorem1_monwin1.mat)
+        outname4= [outpath,'corr_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];  
+        save(outname4,rhonames{:})
+        
+    end
+    
+    
+    % (5) Save SST Autocorrelation Variables
+    if savesst == 1
+        
+        % Allocate cell array
+        sstsave = {};
+        
+        % SST Covariance
+        if savecov == 1
+            sstsave{end+1} = 'SST_aut';
+        end
+        
+        % SST Significance Testing Results
+        if savetest == 1
+            sstsave{end+1} = 'SST_test';
+        end
+        
+        % SST Autocorrelation Coefficients
+        if saverho == 1
+            sstsave{end+1} = 'SST_rho';
+        end
+        
+        % Save (ex: sstAuto_ENS001_ensorem1_monwin1.mat)
+        outname5 = [outpath,'sstAuto_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];  
+        save(outname5,sstsave{:})
+    end
+            
+            
     
     nend = datetime('now');
     elapsed = nend-nstart;
