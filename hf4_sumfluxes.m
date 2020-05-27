@@ -11,7 +11,7 @@ lags   = [1:3]          ;% Number of lags to include
 deg5   = 1              ;% Set to 1 to use smoothed data
 
 
-monwin = 1              ;% Month Window
+monwin = 3              ;% Month Window
 % Note: Net outputs heat flux damping, test results, and correlation coefficients
 % automatically, regardless of the toggle options below!
 
@@ -32,10 +32,10 @@ end
 ensorem     = 1; % Set to 1 if ENSO was removed
 
 % Saving Options
-savedamping = 1; % Set to 1 to save damping
+savedamping = 0; % Set to 1 to save damping
 savetest    = 0; % Set to 1 to save significance testing
 saverho     = 1; % Set to 1 to save correlation coefficients
-savesst     = 0; % Set to 1 to save SST
+savesst     = 1; % Set to 1 to save SST
 
 
 %% Script Start
@@ -129,7 +129,7 @@ for n = 1:length(mnum)
     if savesst == 1
         
         matname = [datpath,'sstAuto_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];  
-        
+        load(matname)
         if savetest == 1
             tsst(:,:,n,:,:) = SST_test;
         end
@@ -176,7 +176,7 @@ for v = 1:length(vars)
         fprintf('\n Saved significance test results for %s! (%s)',vname,datetime('now')-allstart)
         
         % Save SST testing if option is set
-        if savesst == 1
+        if savesst == 1 && v == 1
             outname = [outpath,'SST_test_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat']
             save(outname,'tsst');
             
@@ -200,7 +200,7 @@ for v = 1:length(vars)
         fprintf('\n Saved correlation coefficients for %s! (%s)',vname,datetime('now')-allstart)
         
         % Save SST Autocorrelation Coefficients if option is set
-        if savesst == 1
+        if savesst == 1 && v == 1
             
             outname = [outpath,'SST_rho_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
             save(outname,'rsst');
