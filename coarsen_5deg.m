@@ -1,59 +1,115 @@
 %% User Input
 
-% Name of variable
-varname = 'HMXL';
-outpath = '/home/glliu/01_Data/Project12860/';
+% Name of variable (choices are below)
+% ocn [HMXL, SST, SSS, IFRAC]
+% atm [TS,ICEFRAC,LANDFRAC,SHFLX,LHFLX,FSNS,FLNS]
+varname = 'SST';
+outpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/5deg/';
+domain = 'ocn'                  ; %['ocn' or 'atm']
+
+% Set path to data, based on domain
+% dat_atm = '/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/';
+% dat_ocn = '/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/ocn/proc/tseries/monthly/';
+datpath = strcat('/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/',domain,'/proc/tseries/monthly/');
+
+% Toggles
+areaweight = 0; % Option to weight each cell by its area when averaging (ocn variables)
 
 %% Startup
 allstart = datetime('now');
-fprintf(['Now Coarsening: ',varname])
+fprintf('Now Coarsening %s | Domain: %s | Area-Weight: %s \n',varname,domain,num2str(areaweight))
+fprintf('\t Output Location: %s',outpath)
 
-
-if strcmp(varname,'SST') == 1
-    ncpath = '/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/ocn/proc/tseries/monthly/SST/';
-elseif strcmp(varname,'SSS') == 1
+% --------------------------
+% Construct NC file location
+% --------------------------
+% Salinity is stored at a different location
+if strcmp(varname,'SSS') == 1
     ncpath = '/stormtrack/data0/yokwon/CESM1LE/SSS/';
-elseif strcmp(varname,'HMXL') == 1
-    ncpath = '/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/ocn/proc/tseries/monthly/HMXL/';
+else
+    ncpath = strcat(datpath,varname,'/');
 end
 
+% Add ncpath and pull names from directory using glob (Historical Exp)
 addpath(ncpath)
 ncnames = dir([ncpath,'b.e11.B20TRC5CNBDRD.f09_g16.*',varname,'*.nc']);
 
 % Remove OIC
-%noOIC = structfun(@(x) ~any(contains(x,'OIC')),ncnames)
 ncnames(43:end) = [];
 
+% ------------------------
 % Create 5x5 Lat/Lon Grid
+% ------------------------
 lat5 = [-90:5:90];
-lon5 = [0:5:360];
-[gx,gy] = meshgrid(lon5,lat5);
+lon5 = [-0:5:360];
+
+% ------------------------
+% Setup years
+% ------------------------
+yrs   = 1850:2005;
+
+% Get Index of start year for first ensemble member
+tstart = (find(yrs==1920)-1)*12+1;
+
+% Get total size of time dimension
+tsize = (yrs(end) - 1920 + 1) * 12;
+
+
 
 %% Loop
+% Preallocate [time x lon x lat x ens], values represent midpoint numbers
+varnew = NaN(tsize,length(lon5)-1,length(lat5)-1,length(ncnames));
 
 % Loop for each ncfile
 for n = 1:length(ncnames)
     
     hfst = datetime('now');
+    
     % Get ncfile name
-    nc = [ncpath,'/',ncnames(n).name];
+    nc = [ncpath,ncnames(n).name];
     
     % Read in Data
     var = ncread(nc,varname);
-    tlat = ncread(nc,'TLAT');       % Array of t-grid latitudes
-    tlon = ncread(nc,'TLONG');
+    
+    if strcmp(domain,'ocn') == 1
+        tlat = ncread(nc,'TLAT');       % Array of t-grid latitudes
+        tlon = ncread(nc,'TLONG');
+    else
+        tlat = ncread(nc,'lat'); 
+        tlon =  ncread(nc,'lon'); 
+    end
+    
+    % Multiply variables by the area of the cell
+    if areaweight == 1
+        
+        % Ocean Grid, use area variable
+        if strcmp(domain,'ocn') == 1
+            
+            tarea = ncread(nc,'TAREA');   % Area of T cells (cm2)
+            var   = var .* tarea;         % Variable times Area of cell
+            
+        % Atm Grid, cosine of latitude
+        elseif strcmp(domain,'atm') == 1
+            
+            % Create meshgrid and scale by cosine of latitude
+            [~,Y] = meshgrid(tlon,tlat);
+            AREA  = cos(Y/180*pi);
+            
+            % Apply to variable
+            var   = var .* permute(AREA(:,:,ones(1,size(var,3))),[2,1,3]); 
+        end
+        
+    end
+    
+    % Reduce dimensions if ensemble member 1
+    if n == 1
+        var = var(:,:,tstart:end);
+    end
 
     % Move time dimension to front to linearly index position
     rvar = permute(squeeze(var),[3,1,2]);
     
-    % Create array to store ensemble average
-    if n == 1
-        varsum = zeros(1032,length(lon5),length(lat5));
-    end
-
-    % Remap data to 5x5 Grid (Average everything within)...
-    varnew = NaN(size(rvar,1),length(lon5),length(lat5));
-    icnt = 0;   
+    % Remap data to 5x5 Grid (Average everything within)...  
     % Loop for longitude
     for o = 1:length(lon5)-1
         % Bounding Lons
@@ -62,52 +118,59 @@ for n = 1:length(ncnames)
         
         % Loop for latitude
         for a = 1:length(lat5)-1
-            icnt = icnt + 1;
-%             if mod(icnt,1000) == 0 || icnt == 2590
-%                 fprintf(['Processed ',num2str(icnt),...
-%                     ' of ',num2str((length(lon5)-1)*(length(lat5)-1)-2),' points.\n'])
-%             end
 
             % Bounding Lats
             y0 = lat5(a);
             y1 = lat5(a+1);
+            
+            if strcmp(domain,'ocn') == 1
+                % Find coordinates that satisfy the value
+                kxy = find((tlon >= x0) & (tlon <= x1) & (tlat >= y0) & (tlat <= y1));
+            
+                % Take mean of indexed coordinates
+                tval = mean(rvar(:,kxy),2);
+            elseif strcmp(domain,'atm') == 1
+                kx = find((tlon >= x0) & (tlon <= x1));
+                ky = find((tlat >= y0) & (tlat <= y1));
+                
+                tval = rvar(:,kx,ky);
+                tval = mean(tval,3);
+                tval = mean(tval,2);
 
-            % Find coordinates that satisfy the value
-            kxy = find((tlon > x0) & (tlon < x1) & (tlat > y0) & (tlat < y1));
-            tval = mean(rvar(:,kxy),2);
+            end
+            
+            % Divide by total area for weighting (ocean grid)
+            if areaweight == 1
+                if strcmp(domain,'ocn') == 1
+                    % Sum area of all points
+                    totalarea = sum(tarea(kxy));
+                    tval = tval ./ totalarea;  
+                end
+            end
 
             % Assign NaN to empty regions
             try
-                varnew(:,o,a) = tval;
+                varnew(:,o,a,n) = tval;
             catch
-                varnew(:,o,a) = NaN;
+                varnew(:,o,a,n) = NaN;
             end     
         end
     end
     
-    % Add to variable
-    if n==1
-        varsum = varsum + varnew(841:end,:,:);
-    else
-        varsum = varsum + varnew;
-    end
-    
-    % Save variable to matfile
-    matname = [outpath,'HTR_5deg_',varname,'_ensnum',num2str(n,'%03d'),'.mat'];
-    save(matname,'varnew','lat5','lon5');
-    
      % Timekeeping
      hfend = datetime('now');
      elapsed = char(hfend-hfst);
-     fprintf('\n Output file for ensnum %s in %s seconds\n',num2str(n,'%03d'),elapsed)
+     totelapsed = char(hfend-allstart);
+     fprintf('\n Processed for ensnum %s (%s | %s)',num2str(n,'%03d'),elapsed,totelapsed)
 end
 
-% Take Ensemble Mean (Post Calculation) 
-var_ensmean = varsum./length(ncnames);
+% Make new lat/lon indices (at midpoints)
+LAT = [-87.5:5:87.5];
+LON = [2.5:5:357.5];
 
-% Output Ensmean and variables
-matname = [outpath,'HTR_5deg_',varname,'_ensnumavg.mat'];
-save(matname,'var_ensmean','lat5','lon5');
+% Save variable to matfile
+matname = [outpath,'HTR_5deg_',varname,'_ensnum.mat'];
+save(matname,'varnew','LAT','LON');
 
 % Timekeeping
 allend = datetime('now');
