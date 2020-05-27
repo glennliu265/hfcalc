@@ -2,12 +2,14 @@
 %  hf4_sumfluxes
 %  ---------------------
 % Sum fluxes together
-%% User Inputs
+% Restructured to output file for different members
 
+%% User Inputs
+vars   = {'LHFLX','SHFLX','FLNS','FSNS','RHFLX','THFLX','NHFLX'};
 mnum   = [1:35,101:107] ;% Ensemble Members List
 lags   = [1:3]          ;% Number of lags to include
-monwin = 1              ;% Month Window
-net    = 1              ;% Set to just output net heatflux. See note below-
+
+monwin = 3              ;% Month Window
 % Note: Net outputs heat flux damping, test results, and correlation coefficients
 % automatically, regardless of the toggle options below!
 
@@ -17,43 +19,53 @@ outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdampin
 
 % Enso Removal?
 ensorem     = 1; % Set to 1 if ENSO was removed
-savedamping = 0; % Set to 1 to save damping
-savesigtest = 0; % Set to 1 to save significance testing
-removepts   = 0; % 1 for remove sst fails, 2 for remove flx-sst crosscor fail
+
+% Saving Options
+savedamping = 1; % Set to 1 to save damping
+savetest    = 0; % Set to 1 to save significance testing
+saverho    = 1; % Set to 1 to save correlation coefficients
+savesst     = 0; % Set to 1 to save SST
+
 
 %% Script Start
+allstart = datetime('now');
+fprintf('Now running hf4_sumfluxes (%s)',allstart)
+fprintf('\n Save Options -- Damping:%i | SigTest:%i | Corr:%i | SST:%i',savedamping,savetest,saverho,savesst)
+fprintf('\n\t Save Loc: %s',outpath)
 
-% -----------------------------------------
-% Preallocate (LON x LAT x ENS x MON x LAG)
-% -----------------------------------------
-pasize = [288,192,42,12,length(lags)];
+% -----------------------------------------------
+% Preallocate (LON x LAT x ENS x MON x LAG X VAR)
+% -----------------------------------------------
+numvars = length(vars);
+pasize = [288,192,42,12,length(lags),numvars];
 
 if savedamping == 1
-    dshflx = NaN(pasize);
-    dlhflx = NaN(pasize);
-    dfsns  = NaN(pasize);
-    dflns  = NaN(pasize);
+    dampall = NaN(pasize);
 end
-if savesigtest == 1
-    tlhflx = NaN(pasize);
-    tshflx = NaN(pasize);
-    tfsns  = NaN(pasize);
-    tflns  = NaN(pasize);
-    tsst   = NaN(pasize);
+
+if savetest == 1
+    testall = NaN(pasize);
+    %sigvall = NaN(42,numvars);
+    
+    if savesst == 1
+        tsst = NaN(288,192,42,12,length(lags));
+    end
 end
-if net == 1
-    dnhflx = NaN(pasize);
-    tnhflx = NaN(pasize);
-    tsst   = NaN(pasize);
-    rnhflx = NaN(pasize);
-    rsst   = NaN(pasize);
+
+if saverho == 1
+    corrall = NaN(pasize);
+    
+    
+    if savesst == 1
+        rsst = NaN(288,192,42,12,length(lags));
+    end
 end
 
 % Loop by ensemble member to combine heat fluxes
 for n = 1:length(mnum)
     ensnum = mnum(n);
-
-    % Load and sum damping variables
+    
+     % Load and sum damping variables
     if savedamping == 1
         
         % Construct matfile name (ex: hfdamping_ENS001_ensorem1_monwin1.mat)
@@ -61,124 +73,128 @@ for n = 1:length(mnum)
          
         % Load in variables
         load(matname)
+        dampnames = strcat(vars,'_damping');
         
-        % Directly Read in damping variables
-        dlhflx(:,:,n,:,:) = LHFLX_damping(:,:,:,1:3);
-        dshflx(:,:,n,:,:) = SHFLX_damping(:,:,:,1:3);
-        dfsns(:,:,n,:,:)  = FSNS_damping(:,:,:,1:3);
-        dflns(:,:,n,:,:)  = FLNS_damping(:,:,:,1:3); 
+        for v = 1:length(dampnames)
+            eval(['dampall(:,:,n,:,:,v)=',dampnames{v},'(:,:,:,1:3);']);
+        end
     end
+    
+    % Load and sum significance test results
+    if savetest == 1
         
-    %% Sum and save significance test results
-    if savesigtest == 1
+        % Construct matfile name (ex: test_ENS001_ensorem1_monwin1.mat)
+        matname = [datpath,'test_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
+        
+        % Load variables
+        load(matname)
+        testnames = strcat(vars,'_test');
+        
+        for v = 1:length(testnames)
+            eval(['testall(:,:,n,:,:,v)=',testnames{v},'(:,:,:,1:3);']);
+        end
+        
+    end
+    
+    
+    % Load and sum correlation maps
+    if saverho == 1
         
         % Construct matfile name (ex: corr_ENS001_ensorem1_monwin1.mat)
         matname = [datpath,'corr_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
-        load(matname)
         
-        % Read in significance test results(accidental, extra dim at the
-        % end of each test variable, corresponding to ensemble number
-        tlhflx(:,:,n,:,:) = LHFLX_test(:,:,:,1:3,n);
-        tshflx(:,:,n,:,:) = SHFLX_test(:,:,:,1:3,n);
-        tfsns(:,:,n,:,:)  = FSNS_test(:,:,:,1:3,n);
-        tflns(:,:,n,:,:)  = FLNS_test(:,:,:,1:3,n);
-        tsst(:,:,n,:,:)   = SST_test(:,:,:,1:3);
+        % Load variables
+        load(matname)
+        corrnames = strcat(vars,'_rho');
+        
+        for v = 1:length(corrnames)
+            eval(['corrall(:,:,n,:,:,v)=',corrnames{v},'(:,:,:,1:3);']);
+        end
+        
     end
     
-    % For net heat flux, automatically save the net heat fluxes,
-    % significance testing results, and the correlation coefficients
-    if net == 1
+    
+    % SST Autocorrelation Options
+    if savesst == 1
         
-        % Load Net Heat Flux Damping (ex. nhfdamping_ENS001_ensorem1_monwin1.mat)
-        matname =  [datpath,'nhfdamping_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
-        load(matname)
+        matname = [datpath,'sstAuto_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];  
         
-        % Load Test Results and CorrCoeffs (ex. ncorr_ENS001_ensorem1_monwin1.mat)
-        matname = [datpath,'ncorr_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
-        load(matname)
+        if savetest == 1
+            tsst(:,:,n,:,:) = SST_test;
+        end
         
+        if saverho == 1
+            rsst(:,:,n,:,:) = SST_rho;
+        end
         
-        dnhflx(:,:,n,:,:) = NHFLX_damping(:,:,:,1:3); % Net Heat Flux Damping
-        tnhflx(:,:,n,:,:) = NHFLX_test(:,:,:,1:3);    % Significance Test Results (Cross-Correlation)
-        rnhflx(:,:,n,:,:) = NHFLX_rho(:,:,:,1:3);     % Cross-Correlation Coefficients
-        tsst(:,:,n,:,:)   = SST_test(:,:,:,1:3);      % Significance Test Results (Autocorrelation)
-        rsst(:,:,n,:,:)   = SST_rho(:,:,:,1:3);       % Autocorrelation Coefficients
     end
     
-   fprintf('\nRead in data for ENS%s',num2str(ensnum,'%03d'))
+    fprintf('\n ENS%s loaded! (%s)',num2str(ensnum,'%03d'),datetime('now')-allstart)
 end
 
 
+% Assign variables to their separate summed files
+for v = 1:length(vars)
     
-% Remove points that failed sigtest if option is set
-if removepts ~=0 && savedamping == 1
-    matname = [datpath,'corr_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
-    % temporarily force it to read in 1 month daya
-%     datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/03_hf3out/1mon/';
-%     matname = [datpath,'corr_ENS',num2str(ensnum,'%03d'),'_ensorem',num2str(ensorem),'_monwin3.mat'];
-%     
-    load(matname)
-           
-    % Remove points that failed SST autocorrelation
-    dlhflx = dlhflx .* tsst;
-    a = dlhflx .* tsst;
-    dshflx = dshflx .* tsst;
-    dfsns  = dfsns .* tsst;
-    dflns  = dflns .* tsst;
-
-    if removepts == 2
-        dlhflx = dlhflx .* tlhflx;
-        dshflx = dshflx .* tshflx;
-        dfsns  = dfsns .* tfsns;
-        dflns  = dflns .* tflns; 
-    end                
-end
-%     if length(lags) > 1
-%         % Load in lags 2 and 3
-%         matname = [datpath,'/hfdamping_ENS',num2str(ensnum,'%03d')];
-%         load(matname)
-% 
-%         dlhflx(:,:,n,:,2:3) = LHFLX_damping(:,:,:,2:3);
-%         dshflx(:,:,n,:,2:3) = SHFLX_damping(:,:,:,2:3);
-%         dfsns(:,:,n,:,2:3)  = FSNS_damping(:,:,:,2:3);
-%         dflns(:,:,n,:,2:3)  = FLNS_damping(:,:,:,2:3);
-%     end
     
-if savedamping == 1
-    % Add together heat fluxes for cumulative values
-    drhflx = -1*dfsns + dflns;
-    dthflx = dlhflx + dshflx;
-    dnhflx = drhflx + dthflx;
+    % Get lowercase form of the name
+    vname = char(vars(v));
+    
+    
+    % Save Damping Variables Separately
+    if savedamping ==1     
+        % Get corresponding variable
+        damping = dampall(:,:,:,:,:,v);
+        
+        % Output ex: (LHFLX_damping_ensorem1_monwin1.mat)
+        outname = [outpath,vname,'_damping_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
+        save(outname,'vname','damping');     
+        
+        fprintf('\n Saved damping for %s! (%s)',vname,datetime('now')-allstart)
+    end
+    
+    % Save Test Variables Separately
+    if savetest == 1     
+        % Get corresponding variable (crosscorrelation test)
+        test = testall(:,:,:,:,:,v);
+        
+        
+        % Output ex: (LHFLX_test_ensorem1_monwin1.mat)
+        outname = [outpath,vname,'_test_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
+        save(outname,'vname','test');
+        fprintf('\n Saved significance test results for %s! (%s)',vname,datetime('now')-allstart)
+        
+        % Save SST testing if option is set
+        if savesst == 1
+            outname = [outpath,'SST_test_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat']
+            save(outname,'tsst');
+            
+            fprintf('\n Saved significance test results for SST! (%s)',datetime('now')-allstart)
+        end
+        
+        
+    end
+        
+        
+
+    % Save Cross Correlation Coefficients
+    if saverho == 1      
+        % Get corresponding variable (crosscorrelation coefficients)
+        rho = corrall(:,:,:,:,:,v);
+        
+        % Output ex: (LHFLX_rho_ensorem1_monwin1.mat)
+        outname = [outpath,vname,'_rho_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
+        save(outname,'vname','rho');
+        
+        fprintf('\n Saved correlation coefficients for %s! (%s)',vname,datetime('now')-allstart)
+        
+        % Save SST Autocorrelation Coefficients if option is set
+        if savesst == 1
+            
+            outname = [outpath,'SST_rho_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat'];
+            save(outname,'rsst');
+            fprintf('\n Saved correlation coefficients for SST! (%s)',datetime('now')-allstart)
+        end  
+    end
+ 
 end
-
-% Save variables
-if length(lags) == 1
-    outpath = strcat(outpath,'lag1/');
-end
-
-if ensorem == 0
-    out1 = [outpath,'damping_netfluxes_noensorem_rmpts',num2str(removepts),'.mat'];
-    out2 = [outpath,'damping_hfluxes_noensorem_rmpts',num2str(removepts),'.mat'];
-    out3 = [outpath,'sigtest_hfluxes_noensorem_rmpts',num2str(removepts),'.mat'];
-else
-    out1 = [outpath,'damping_netfluxes_rmpts',num2str(removepts),'.mat'];
-    out2 = [outpath,'damping_hfluxes_rmpts',num2str(removepts),'.mat'];
-    out3 = [outpath,'sigtest_hfluxes_rmpts',num2str(removepts),'.mat'];
-end
-
-if savedamping == 1
-    save(out1,'dnhflx','drhflx','dthflx')
-    save(out2,'dlhflx','dshflx','dfsns','dflns')
-end
-
-if savesigtest == 1
-    %save(out3,'tsst')
-    save(out3,'tlhflx','tshflx','tfsns','tflns','tsst')   
-end
-
-% Save net damping file to "outpath/alldamping_nhflx_monwin1.mat"
-if net == 1
-    save([outpath,'alldamping_nhflx_monwin',num2str(monwin),'.mat'],'dnhflx','tnhflx','rnhflx','tsst','rsst')
-end
-
-
