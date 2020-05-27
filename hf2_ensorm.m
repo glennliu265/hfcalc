@@ -32,22 +32,31 @@
 %
 
 %% User Input ------------
-vars    = {'LHFLX','SHFLX','FSNS','FLNS'};
+vars    = {'TS'};
 ensolag = 1     ;% Lag between variable and ENSO Component Removed
 monwin  = 3     ;
 pcrem   = [1,2] ;% PCs to remove
 EOFcorr = 1     ;% Option to correct signs using coords in Lat/Lon Boxes Section
-
-
+deg5    = 1     ;% Use smoothed 5 degree data
+printflip = 0   ;% Toggle to print warning when EOF was flipped due to criteria
 
 % Path to data (monthly folder before the variable addition)
-datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/';
-outpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/02_hf2out/';
-latlon  = '/home/glliu/01_Data/CESM1_LATLON.mat';
-outfile  =[outpath,'ENSO_EOF_ens.mat'];
+if deg5 == 1
+    % Just add +5deg to everything
+    datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/5deg/';
+    outpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/02_hf2out/5deg/';
+    latlon  = '/home/glliu/01_Data/CESM1_LATLON_5deg.mat';
+    outfile  =[outpath,'ENSO_EOF_ens_5deg.mat'];
+else
+    datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/';
+    outpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/02_hf2out/';
+    latlon  = '/home/glliu/01_Data/CESM1_LATLON.mat';
+    outfile  =[outpath,'ENSO_EOF_ens.mat'];
+end
 
 % Other sets
 mnum  = [1:35,101:107];% Ensemble Members List
+
 
 % Toggles
 calc_PC = 0; % Calculate PC from TS data if set to 1
@@ -107,15 +116,25 @@ if calc_PC == 1
     cpstart = datetime('now');
     fprintf('Calculating PC from SST (%s)',cpstart)
     
+    % ---------------------
     % Preallocate Variables
-    PC1 = NaN(1,86,12,107); PC2 = NaN(size(PC1)); PC3 = NaN(size(PC1));
-    VarPerc1 = NaN(1,12,107); VarPerc2 = size(VarPerc1); VarPerc3 = size(VarPerc1);
+    % ---------------------
+    % Dimensions [1 x yr x mon x ensnum]
+    PC1 = NaN(1,86,12,length(mnum)); PC2 = NaN(size(PC1)); PC3 = NaN(size(PC1));
+    
+    VarPerc1 = NaN(1,12,length(mnum)); VarPerc2 = size(VarPerc1); VarPerc3 = size(VarPerc1);
+    
     EOF1=[];EOF2=[]; EOF3=[];
-
+    
+    % -------------------------------------
     % Load Lat/Lon and compute area weights
+    % -------------------------------------
     [X,Y]=meshgrid(LON,LAT); 
     AREA=cos(Y/180*pi); % Note this is 192 x 288
     
+    % -------------------------------------
+    % Limit to area of interest
+    % -------------------------------------
     % Find indices for area of interest
     X00=LON';
     Y00=LAT'; 
@@ -129,17 +148,22 @@ if calc_PC == 1
     
     % Restrict to area of interest
     AREA=AREA(ky,kx);
-    X = X(ky,kx);
-    Y = Y(ky,kx);
+    Y0  = Y00(ky);   % Need size later for eof 
+    X0  = X00(kx);   % Need size later for eof
+    X   = X(ky,kx);
+    Y   = Y(ky,kx);
     
+    
+    % -------------------------------------
     % Compute PC1/PC2 via yo_eof
+    % -------------------------------------
     for n = 1:length(mnum)
 
         % Load SST data
         ensnum  = mnum(n);
         matname = [datpath,'/TS_ens',num2str(ensnum,'%03d'),'_proc.mat'];
         load(matname)
-
+    
         % Find NaN Values
         varrm      = permute(varrm,[3,4,2,1]);   % move time dims to front (M X Y LAT X LON)
         varrm      = varrm(:,:,ky,kx);           % Take only selected region
@@ -154,6 +178,7 @@ if calc_PC == 1
         for m = 1:12
 
             % Select Month
+            imon = m;
             var_mon = varr_nonan(m,:,:);
             Xin = X(:);
             Yin = Y(:);
@@ -194,7 +219,9 @@ if calc_PC == 1
                     & (Yin >= cLAT1) & (Yin <= cLAT2));
                 % Change sign accordingly
                 if nansum(ev1a(kxy)) < 0
-                    fprintf('\nFlipping EOF 1 for mon %s since sum = %s',num2str(imon,'%02d'),num2str(nansum(ev1a(kxy))))
+                    if printflip == 1
+                        fprintf('\nFlipping EOF 1 for mon %s since sum = %s',num2str(imon,'%02d'),num2str(nansum(ev1a(kxy))))
+                    end
                     ev1a = ev1a*-1;
                     PC1a = PC1a*-1;
                 end
@@ -203,7 +230,9 @@ if calc_PC == 1
                 kxy = find((Xin >= dLON1) & (Xin <= dLON2)...
                     & (Yin >= dLAT1) & (Yin <= dLAT2));
                 if nansum(ev2a(kxy)) < 0
-                    fprintf('\nFlipping EOF 2 for mon %s since sum = %s',num2str(imon,'%02d'),num2str(nansum(ev2a(kxy))))
+                    if printflip == 1
+                        fprintf('\nFlipping EOF 2 for mon %s since sum = %s',num2str(imon,'%02d'),num2str(nansum(ev2a(kxy))))
+                    end
                     ev2a = ev2a*-1;
                     PC2a = PC2a*-1;
                 end
@@ -212,22 +241,24 @@ if calc_PC == 1
                 kxy = find((Xin >= eLON1) & (Xin <= eLON2)...
                     & (Yin >= eLAT1) & (Yin <= eLAT2));
                 if nansum(ev3a(kxy)) < 0
-                    fprintf('\n**Flipping EOF 3 for mon %s since sum = %s',num2str(imon,'%02d'),num2str(nansum(ev3a(kxy))))
+                    if printflip == 1
+                        fprintf('\n**Flipping EOF 3 for mon %s since sum = %s',num2str(imon,'%02d'),num2str(nansum(ev3a(kxy))))
+                    end
                     ev3a = ev3a*-1;
                     PC3a = PC3a*-1;
                 end
             end
 
             % store the results 
-            VarPerc1(:,imon,ensnum)=q(1);
-            VarPerc2(:,imon,ensnum)=q(2);
-            VarPerc3(:,imon,ensnum)=q(3);
-            PC1(:,:,imon,ensnum)=PC1a;
-            PC2(:,:,imon,ensnum)=PC2a;
-            PC3(:,:,imon,ensnum)=PC3a;
-            EOF1(:,:,imon,ensnum)=reshape(ev1a,length(Y0),length(X0));
-            EOF2(:,:,imon,ensnum)=reshape(ev2a,length(Y0),length(X0));
-            EOF3(:,:,imon,ensnum)=reshape(ev3a,length(Y0),length(X0));
+            VarPerc1(:,imon,n)=q(1);
+            VarPerc2(:,imon,n)=q(2);
+            VarPerc3(:,imon,n)=q(3);
+            PC1(:,:,imon,n)=PC1a;
+            PC2(:,:,imon,n)=PC2a;
+            PC3(:,:,imon,n)=PC3a;
+            EOF1(:,:,imon,n)=reshape(ev1a,length(Y0),length(X0));
+            EOF2(:,:,imon,n)=reshape(ev2a,length(Y0),length(X0));
+            EOF3(:,:,imon,n)=reshape(ev3a,length(Y0),length(X0));
             
             iloopend = datetime('now');
             elapsed = iloopend-cpstart;
@@ -243,7 +274,7 @@ else
 end
 
 %%  ------------------------
-%   Removal
+%   ENSO Removal
 %   ------------------------
 
 for v = 1:length(vars)
@@ -264,6 +295,7 @@ for v = 1:length(vars)
         varrm = permute(varrm,[3,4,1,2]);
         
         % Reduce yr dimension of variable to prepare for removal
+        % Drop first and last month for 3-month window
         if winsize > 0
             var_noenso = varrm(:,2:end-1,:,:);
         else
@@ -271,14 +303,14 @@ for v = 1:length(vars)
         end
         finsize = size(var_noenso);
         
-        % Preallocate enso component variable
+        % Preallocate enso component variable, with # of PCs to remove
         all_ensocomp = zeros([size(var_noenso),length(pcrem)]);
 
         % Loop by PC
         for pcn = 1:length(pcrem)   
             
             % Get PC (1 x yr x mon x ensnum)
-            eval(['PC = PC',num2str(pcn),'(:,:,:,',num2str(ensnum),');']);
+            eval(['PC = PC',num2str(pcn),'(:,:,:,',num2str(n),');']);
             
             % Permute PC for input into laglead indexer
             % [1 x 86 x 12] -> [12 x 86]

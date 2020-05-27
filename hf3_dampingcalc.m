@@ -26,6 +26,7 @@ skipto  = 1             ; % Skip to specific member
 stopat  = 43            ; % Stop Iteration at given number
 timerng = 1921:2004     ; % Range of Years to Include
 startyr = 1921          ; %
+deg5    = 1             ; % Toggle for the smoothed data
 
 % T-Test parameters
 pval     = 0.05          ; % p-value that will be used
@@ -35,15 +36,30 @@ tails    = 2             ; % 1 or 2-tailed T-test
 dof_man  = 82            ; % Manual DOF value
 
 % Path to data (monthly folder before the variable addition)
-if ensorem == 1
-    datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/02_hf2out/ensorem/';
+if deg5 == 1
+     
+    datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/02_hf2out/5deg/';
+    latlon  = '/home/glliu/01_Data/CESM1_LATLON_5deg.mat';
+    
+    outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/03_hf3out/5deg/',num2str(monwin),'mon/'];
+    lonsize = 72;
+    latsize = 36;
 else
-    datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/';
+    if ensorem == 1
+        datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/02_hf2out/ensorem/';
+    else
+        datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/';
+    end
+    latlon  = '/home/glliu/01_Data/CESM1_LATLON.mat';
+    
+    % OutPath
+    outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/03_hf3out/',num2str(monwin),'mon/'];
+    
+    lonsize = 288;
+    latsize = 192;
 end
-latlon  = '/home/glliu/01_Data/CESM1_LATLON.mat';
 
-% OutPath
-outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/03_hf3out/',num2str(monwin),'mon/'];
+
 
 % Other sets
 mnum  = [1:35,101:107];% Ensemble Members List
@@ -53,7 +69,7 @@ savedamping = 1;% Set to 1 to save damping values
 savecov     = 0;% Set to 1 to save covariance and autocov
 savetest    = 0;% Set to 1 to save significance test results (rsst)
 saverho     = 1;% Set to 1 to save map of cross-correlation coefficients
-savesst     = 0;% Set to 1 to save SST autcorrelation
+savesst     = 1;% Set to 1 to save SST autcorrelation
 %% -----------------------------------------------------------------------
 %  Script Start/Setup
 %  -----------------------------------------------------------------------
@@ -82,12 +98,12 @@ if savesst == 1
     % Preallocate for SST Autocorrelation Testing Results
     if savetest == 1
         sigval    = NaN(1,  length(vars)+1)       ; % Critical Correlation Value
-        st_aut    = NaN(288,192,12,length(lags))  ; % Significance Test Result
+        st_aut    = NaN(lonsize,latsize,12,length(lags))  ; % Significance Test Result
     end
     
     % Preallocate for SST Autocorrelation Coefficients
     if saverho == 1
-          rho_aut   = NaN(288,192,12,length(lags))  ; % Correlation Coefficient
+          rho_aut   = NaN(lonsize,latsize,12,length(lags))  ; % Correlation Coefficient
     end
 end
 
@@ -111,7 +127,7 @@ for n = 1:length(mnum)
     
     % Load file depending on if enso was removed
     if ensorem == 1
-        % Load in SST variable [12 84 288 192]
+        % Load in SST variable [12 84 lonsize latsize]
         matname = [datpath,'TS_noenso_ENS',num2str(ensnum,'%03d'),'.mat'];
         load(matname)
     
@@ -146,17 +162,17 @@ for n = 1:length(mnum)
         
         % Preallocate arrays for cross correlation
         if savetest == 1       
-            st_cov     = NaN(288,192,12,length(lags))  ; % Significance Test Result 
+            st_cov     = NaN(lonsize,latsize,12,length(lags))  ; % Significance Test Result 
         end
         
         % Preallocate arrays for cross-corr coefficients
         if saverho == 1
-            rho_cov   = NaN(288,192,12,length(lags))  ; % Correlation Coefficient
+            rho_cov   = NaN(lonsize,latsize,12,length(lags))  ; % Correlation Coefficient
         end
         
         % Note: load in and sum fluxes (if NHFLX RHFLX or THFLX)
         if strcmp(vname,'NHFLX') == 1
-            flx = NaN(12,84,288,192,4);
+            flx = NaN(12,84,lonsize,latsize,4);
             for vi = 1:4
                 mult = 1;
                 switch vi
@@ -181,7 +197,7 @@ for n = 1:length(mnum)
             flx = nansum(flx,5);
             
         elseif strcmp(vname,'RHFLX') == 1
-            flx = NaN(12,84,288,192,4);
+            flx = NaN(12,84,lonsize,latsize,4);
             for vi = 3:4
                 mult = 1;
                 switch vi
@@ -202,7 +218,7 @@ for n = 1:length(mnum)
             flx = nansum(flx,5);
             
         elseif strcmp(vname,'THFLX') == 1
-            flx = NaN(12,84,288,192,4);
+            flx = NaN(12,84,lonsize,latsize,4);
             for vi = 1:2
                 switch vi
                     case 1
@@ -236,11 +252,11 @@ for n = 1:length(mnum)
             
         % Preallocate Arrays (Oof this might take a lot of mem?)
         if savedamping == 1
-            hfdamping = NaN(288,192,12,3);
+            hfdamping = NaN(lonsize,latsize,12,3);
         end
         if savecov == 1 
-            covall    = NaN(288,192,12,3);
-            autall    = NaN(288,192,12,3);
+            covall    = NaN(lonsize,latsize,12,3);
+            autall    = NaN(lonsize,latsize,12,3);
         end       
 
         % Loop by lag
@@ -352,14 +368,14 @@ for n = 1:length(mnum)
                     [~,~,cc_test,~,~,cc_thres] = pcorr(flx2d,sstlag2d,1,pval,tails,dof_type,dof_man);
                     
                     % Store values        
-                    st_cov(:,:,m,l)      = reshape(cc_test,288,192);
+                    st_cov(:,:,m,l)      = reshape(cc_test,lonsize,latsize);
                     sigval(1,v)              = cc_thres;
                 end
                 
                 % Cross Correlation Coefficients
                 if saverho == 1
                     [cc_rho,~,~,~,~,~] = pcorr(flx2d,sstlag2d,1,pval,tails,dof_type,dof_man);
-                    rho_cov(:,:,m,l)     = reshape(cc_rho,288,192);
+                    rho_cov(:,:,m,l)     = reshape(cc_rho,lonsize,latsize);
                 end
                 
                 % ---------------------------------------------------------
@@ -368,13 +384,13 @@ for n = 1:length(mnum)
                 if savesst == 1 && v == 1
                     if savetest == 1
                         [~,~,ac_test,~,~,ac_thres]    = pcorr(sst2d,sstlag2d,1,pval,tails,dof_type,dof_man);
-                        st_aut(:,:,m,l)        = reshape(ac_test,288,192);
+                        st_aut(:,:,m,l)        = reshape(ac_test,lonsize,latsize);
                         sigval(1,length(vars)+1) = ac_thres;
                     end
                     
                     if saverho == 1
                         [ac_rho,~,~,~,~,~]    = pcorr(sst2d,sstlag2d,1,pval,tails,dof_type,dof_man);
-                        rho_aut(:,:,m,l)     = reshape(ac_rho,288,192);
+                        rho_aut(:,:,m,l)     = reshape(ac_rho,lonsize,latsize);
                     end
                 end
                 
@@ -404,15 +420,15 @@ for n = 1:length(mnum)
                     % ---------------------------------------
                     % Store variables
                     % ---------------------------------------
-                    hfdamping(:,:,m,l) = reshape(damping,288,192)     ; % Damping Coeffs
+                    hfdamping(:,:,m,l) = reshape(damping,lonsize,latsize)     ; % Damping Coeffs
                     
                     % Also save covariance if option is set
                     if savecov == 1
-                        covall(:,:,m,l)    = reshape(cov,288,192)     ; % Covariance (FLX, SSTlag)
+                        covall(:,:,m,l)    = reshape(cov,lonsize,latsize)     ; % Covariance (FLX, SSTlag)
                         
                         % Save SST autocovariance on first iteration
                         if v == 1
-                           autall(:,:,m,l)    = reshape(aut,288,192)  ; % Autocovariance (SST, SSTlag)
+                           autall(:,:,m,l)    = reshape(aut,lonsize,latsize)  ; % Autocovariance (SST, SSTlag)
                         end
                     end
                 end

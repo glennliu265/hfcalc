@@ -64,8 +64,6 @@ for v = 1:length(vars)
     % Get total size of time dimension
     tsize = (yrs(end) - 1920 + 1) * 12;
 
-
-
     %% Loop
     % Preallocate [time x lon x lat x ens], values represent midpoint numbers
     varnew = NaN(tsize,length(lon5)-1,length(lat5)-1,length(ncnames));

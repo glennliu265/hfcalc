@@ -8,14 +8,25 @@
 vars   = {'LHFLX','SHFLX','FLNS','FSNS','RHFLX','THFLX','NHFLX'};
 mnum   = [1:35,101:107] ;% Ensemble Members List
 lags   = [1:3]          ;% Number of lags to include
+deg5   = 1              ;% Set to 1 to use smoothed data
 
-monwin = 3              ;% Month Window
+
+monwin = 1              ;% Month Window
 % Note: Net outputs heat flux damping, test results, and correlation coefficients
 % automatically, regardless of the toggle options below!
 
 % Paths to data and output
-datpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/03_hf3out/',num2str(monwin),'mon/'];
-outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/04_hf4out/',num2str(monwin),'mon/'];
+if deg5 == 1
+    datpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/03_hf3out/5deg/',num2str(monwin),'mon/'];
+    outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/04_hf4out/5deg/',num2str(monwin),'mon/'];
+    lonsize = 72;
+    latsize = 36;
+else
+    datpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/03_hf3out/',num2str(monwin),'mon/'];
+    outpath = ['/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/04_hf4out/',num2str(monwin),'mon/'];
+    lonsize = 288;
+    latsize = 192;
+end
 
 % Enso Removal?
 ensorem     = 1; % Set to 1 if ENSO was removed
@@ -23,21 +34,21 @@ ensorem     = 1; % Set to 1 if ENSO was removed
 % Saving Options
 savedamping = 1; % Set to 1 to save damping
 savetest    = 0; % Set to 1 to save significance testing
-saverho    = 1; % Set to 1 to save correlation coefficients
+saverho     = 1; % Set to 1 to save correlation coefficients
 savesst     = 0; % Set to 1 to save SST
 
 
 %% Script Start
 allstart = datetime('now');
-fprintf('Now running hf4_sumfluxes (%s)',allstart)
-fprintf('\n Save Options -- Damping:%i | SigTest:%i | Corr:%i | SST:%i',savedamping,savetest,saverho,savesst)
+fprintf('Now running hf4_sumfluxes for monwin %i (%s)',monwin,allstart)
+fprintf('\n Save Options -- Damping:%i | SigTest:%i | Corr:%i | SST:%i | deg5:%i',savedamping,savetest,saverho,savesst,deg5)
 fprintf('\n\t Save Loc: %s',outpath)
 
 % -----------------------------------------------
 % Preallocate (LON x LAT x ENS x MON x LAG X VAR)
 % -----------------------------------------------
 numvars = length(vars);
-pasize = [288,192,42,12,length(lags),numvars];
+pasize = [lonsize,latsize,42,12,length(lags),numvars];
 
 if savedamping == 1
     dampall = NaN(pasize);
@@ -48,7 +59,7 @@ if savetest == 1
     %sigvall = NaN(42,numvars);
     
     if savesst == 1
-        tsst = NaN(288,192,42,12,length(lags));
+        tsst = NaN(lonsize,latsize,42,12,length(lags));
     end
 end
 
@@ -57,7 +68,7 @@ if saverho == 1
     
     
     if savesst == 1
-        rsst = NaN(288,192,42,12,length(lags));
+        rsst = NaN(lonsize,latsize,42,12,length(lags));
     end
 end
 

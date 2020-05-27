@@ -24,9 +24,21 @@
 vars = {'TS','LHFLX','SHFLX','FSNS','FLNS'};
 expr = 'HTR';
 
+deg5 = 1; % Set to 1 for coarser 5deg resolution
+
 % Path to data (monthly folder before the variable addition)
-datpath = '/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/';
-outpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/';
+
+if deg5 == 1
+    datpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/5deg/';
+    outpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/5deg/';
+    lonsize = 72;
+    latsize = 36;
+else
+    datpath = '/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/';
+    outpath = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_matfiles/01_hf1out/';
+    lonsize = 288;
+    latsize = 192;
+end
 
 % Other sets
 yrs   = 1850:2005;
@@ -39,7 +51,7 @@ maskloc  = '/home/glliu/01_Data/masks/'     ;% Location of Landice masks
 step1 = 1; % Ens Avg Removal
 step2 = 1; % Climatological Mean Removal
 %% Script Start ------------
-fprintf('Running hf1_enavgrm (%s)\n',datetime('now'))
+fprintf('Running hf1_enavgrm | 5deg: %i (%s)\n',deg5,datetime('now'))
 allstart = datetime('now');
 
 % Load startup
@@ -58,9 +70,17 @@ for v = 1:length(vars)
     % Get Variable Name
     vname = char(vars(v));
     ncnames = build_e11name(expr,vname);
+    
+    % Load in variable for 5 deg
+    if deg5 == 1
+        loadmat = ['HTR_5deg_',vname,'.mat'];
+        load([datpath,loadmat])
+        % Use varnew variable [time x lon x lat x ens]
+    end
       
     % Preallocate
-    varall = NaN(288,192,tsize,length(ncnames));
+    varall = NaN(lonsize,latsize,tsize,length(ncnames));
+
     
     for n = 1:length(ncnames)
         lstart = datetime('now');       
@@ -70,19 +90,35 @@ for v = 1:length(vars)
         fprintf('%s: Loading ENS %s...',vname,num2str(ensnum,'%02d'))
         
         % Read in variable
-        ncpath = strcat(datpath,vname,'/',ncnames(n));
-        readvar = ncread(ncpath,vname);
+        if deg5 == 1
+            
+            % Get ensemble specific data
+            readvar = varnew(:,:,:,n);
+            
+            % Permute to [lon x lat x time]
+            readvar = permute(readvar,[2,3,1]);
+            
+        % Read in raw data at full resolution
+        else
+            ncpath = strcat(datpath,vname,'/',ncnames(n));
+            readvar = ncread(ncpath,vname);
                
-        % Reduce dimensions if ensemble member 1
-        if n == 1
-            readvar = readvar(:,:,tstart:end);
+            % Reduce dimensions if ensemble member 1
+            if n == 1
+                readvar = readvar(:,:,tstart:end);
+            end
         end
-        
+
         % -------------------
         % Apply Land/Ice Mask
         % -------------------
         % Load in land/ice mask
-        maskmat = [maskloc,'landicemask_ensnum',num2str(ensnum,'%03d'),'.mat'];
+        if deg5 == 1
+            % Extra "_5deg"
+            maskmat = [maskloc,'landicemask_ensnum',num2str(ensnum,'%03d'),'_5deg.mat'];
+        else
+            maskmat = [maskloc,'landicemask_ensnum',num2str(ensnum,'%03d'),'.mat'];
+        end
         load(maskmat)
         
         % Replicate mask to time period and apply max
@@ -117,7 +153,7 @@ for v = 1:length(vars)
     %  Step 2. Anomaly Calculation
     %  ---------------------------
     % Reshape to separate mon and year
-    varanom = reshape(varall,288,192,12,size(varall,3)/12,length(ncnames));
+    varanom = reshape(varall,lonsize,latsize,12,size(varall,3)/12,length(ncnames));
     
     if step2 == 1
         % Calculate climatological mean
