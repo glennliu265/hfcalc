@@ -21,17 +21,18 @@
 fluxes   = {'nhflx'}  ; %Flux to Visualize
 
 lonremap  = 1          ; %Set 1 to remap LON from 360 -> -180 (Change [bbox] acc.)
-monlist   = [12]       ; %List of months to visualize
+monlist   = [1:12]       ; %List of months to visualize
 avgmon    = 0          ; %Set 1 to average across all months in monlist
-lag       = [1]      ; %List of lags to average over/sum over
+lag       = [1:2]      ; %List of lags to average over/sum over
 ensnum    = [1:42]     ; %List of ensemble members to average over
-monwin    = 1          ; %Months considered (1mon vs 3mon)
+monwin    = 3          ; %Months considered (1mon vs 3mon)
 ensorem   = 1          ; %Set to 1 if enso was removed
 savedamp  = 0          ; % Set to 1 to save damping variables after applying sigtest
 mode      = 2          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (4) Both
 ensavgf   = 1          ; %Set to 1 if you want to take the ensemble average first
 lag1_elim = 0          ;% Set to 1 to eliminate rest of lags if lag 1 fails
 insigNaN  = 1          ;% Set to 1 to change insignificant feedbacks to NaN
+deg5      = 0          ;% Set to 1 to use smoothed data
 %(3) to msk cor, (4) for both, (5) for old threshold, (6) for custom
 %threshold
 
@@ -49,12 +50,12 @@ dof_man  = 82            ; % Manual DOF value
 plotpt = 1;
 lon_find = -72;
 lat_find = 35;
-caxischoose = [-100 100];% Good caxis threshold for THFLX, noisy pixel id
+caxischoose = [-50 50];% Good caxis threshold for THFLX, noisy pixel id
 
 % -------------------
 % Plot Opt
 % -------------------
-plot_allens = 1; % Set to 1 to create separate plot for all ens members
+plot_allens = 0; % Set to 1 to create separate plot for all ens members
 plot_ensavg = 1; % Set to 1 to create plot of ensemble average
 plot_oneens = 0; 
 plot_lagmap = 0; % Set to 1 to create plot of lags removed
@@ -62,22 +63,45 @@ plot_mask   = 0;
 
 % Set Paths
 projpath = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/';
-outpath  = [projpath,'02_Figures/20200522/'];
-datpath  = [projpath,'01_Data/'];
+outpath  = [projpath,'02_Figures/20200526/'];
 
 % Add Paths
-addpath(datpath) % Path to data
+
+addpath('/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/01_Data'); % Path to common data
 addpath('/Users/gliu/') % Path to scripts
 
-% Load data
-load(strcat(datpath,['alldamping_nhflx_monwin',num2str(monwin),'.mat']))
-load('CESM1_LATLON.mat')
+if deg5 == 1 
+    datpath  = [projpath,'01_Data/5deg/'];
+    load('CESM1_LATLON_5deg.mat');
+    lonsize = 72;
+    latsize = 36;
+else
+    datpath  = [projpath,'01_Data/'];
+    load('CESM1_LATLON.mat')
+    lonsize = 288;
+    latsize = 192;
+end
+
+addpath(datpath) % Path to data
+% Load SST autocorrelation coefficients
+load(strcat(datpath,['SST_rho_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat']))
 
 % Bounding Boxes (lon1 lon2 lat1 lat2)
 bbox         = [-100 20 -25 75]; % North Atlantic
 
 % Visualization settings
 figtype = 0;
+if monwin == 3
+    monlab = {'DJF','JFM','FMA',...
+        'MAM','AMJ','MJJ',...
+        'JJA','JAS','ASO',...
+        'SON','OND','NDJ'};
+elseif monwin == 1
+    monlab = {'Jan','Feb','Mar',...
+    'Apr','May','Jun',...
+    'Jul','Aug','Sep',...
+    'Oct','Nov','Dec'};
+end
 
 % Other Settings
 mnum = [1:35,101:107] ;%All ensemble members
@@ -85,7 +109,6 @@ mnum = [1:35,101:107] ;%All ensemble members
 startup
 %% ------------------------------------------------------------------------
 %  Script Start
-
 
 %% -------------------------------------------
 %  Prepare Figure Labels
@@ -107,9 +130,9 @@ end
 % Determine effective DOF
 if dof_man == 0
     if monwin == 1
-        n_eff = 84
+        n_eff = 84;
     elseif monwin == 3
-        n_eff = 82
+        n_eff = 82;
     end
 % Manually set dof
 else
@@ -128,8 +151,17 @@ for i = 1:length(fluxes)
     % Load variable and pull flux
     fluxtype = char(fluxes(i));
     fluxlab = upper(fluxtype);
-    eval(['v = d',fluxtype,';'])
-   
+    %eval(['v = d',fluxtype,';'])
+    
+    
+    % Load damping variable
+    load(strcat(datpath,[fluxlab,'_damping_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat']))
+    v = damping;
+    
+    % Load correlation coefficients
+    load(strcat(datpath,[fluxlab,'_rho_ensorem',num2str(ensorem),'_monwin',num2str(monwin),'.mat']))
+    rflx = rho;
+    
     % -----------------------------------
     % Masking
     % -----------------------------------
@@ -141,13 +173,9 @@ for i = 1:length(fluxes)
     else
         
         % Create masks with threshold
-        if monwin == 3
-            msst = rsst   > corrthres;
-            mflx = rnhflx > corrthres;
-        elseif monwin == 1
-            msst = rsst   > corrthres;
-            mflx = rnhflx > corrthres;
-        end
+        msst = rsst   > corrthres;
+        mflx = rflx   > corrthres;
+
         
         % Lag 1-based elimination
         if lag1_elim == 1
@@ -193,7 +221,7 @@ for i = 1:length(fluxes)
     
     % Check size and adjust variable for plotting
     chksize = size(v)
-    refsize = [288, 192, 12, 42, 3];
+    refsize = [lonsize, latsize, 12, 42, 3];
     if isequal(chksize,refsize) ~= 1
         fprintf('Permuting variable to match script requirements')
         corrsize = zeros(1,length(refsize));
@@ -346,7 +374,7 @@ for i = 1:length(fluxes)
 
             sgtitle(strcat(fluxlab,' Damping; Mon ',num2str(imon,'%02d'),...
                 '; Lag ',stlag,...
-                '; Ens  ',stensnum),...
+                '; All Ens'),...
                     'FontSize',20);
             saveas(gcf,figname,'png')   
             fprintf('\nCompleted month %s',num2str(imon,'%02d'))
@@ -377,7 +405,6 @@ for i = 1:length(fluxes)
             
             if plot_oneens == 1
                 stensnum = num2str(ensnum(1),'%02d');
-
             end
             
             figname = strcat(outpath,fluxlab,'damping_mon',num2str(imon,'%02d'),...
