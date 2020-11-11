@@ -44,10 +44,10 @@ times = ld['times']
 # Find dimensions and separate out space
 nlon = lon.shape[0]
 nlat = lat.shape[0]
-npcs = eofs.shape[1] 
+npcs = eofs.shape[2] 
 
 # Reshape EOFs variable
-eofs = eofs.reshape(nlat,nlon,npcs)
+eofs = eofs.reshape(nlat,nlon,12,npcs)
 
 # # Conver to 180
 # eofs = eofs.transpose(1,0,2)
@@ -59,13 +59,14 @@ eofs = eofs.reshape(nlat,nlon,npcs)
 cmap = cmocean.cm.balance
 cint = np.arange(-1,1.1,.1)
 n = 0
+m = 0
 
 fig,axs = plt.subplots(2,1,gridspec_kw={'height_ratios':[3,1]},subplot_kw={'projection': ccrs.PlateCarree(central_longitude=180)})
 ax = axs[0]
 ax = viz.init_map(bbox,ax=ax)
-pcm = ax.contourf(lon,lat,eofs[:,:,n],levels=cint,cmap=cmap,transform = ccrs.PlateCarree())
+pcm = ax.contourf(lon,lat,eofs[:,:,m,n],levels=cint,cmap=cmap,transform = ccrs.PlateCarree())
 fig.colorbar(pcm,ax=ax)
-ax.set_title("EOF %i, Variance Explained %.2f"%(n+1,varexp[n]*100) + "%")
+ax.set_title("EOF %i, Month %i, Variance Explained %.2f"%(n+1,m+1,varexp[m,n]*100) + "%")
 
 ax = axs[1]
 ax.plot(pcs[:,n])
