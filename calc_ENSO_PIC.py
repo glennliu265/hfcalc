@@ -33,7 +33,7 @@ mode = 'SLAB' # "SLAB or FULL"
 varkeep = ['TS','time','lat','lon','lev'] 
 
 # PCs to calculate
-pcrem = 2 # User edited variable!
+pcrem = 3# User edited variable!
 
 # Subset data for enso index calculation
 bbox = [120, 290, -20, 20]
@@ -43,7 +43,7 @@ outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping
 outname = "EOF_ENSO_PIC_SLAB.npz"
 
 #%% Functions 
-def check_ENSO_sign(eofs,pcs,lon,lat,verbose=True,reshape_space=False):
+def check_ENSO_sign(eofs,pcs,lon,lat,verbose=True):
     """
     checks sign of EOF for ENSO and flips sign by check the sum over
     conventional ENSO boxes (see below for more information)
@@ -55,9 +55,6 @@ def check_ENSO_sign(eofs,pcs,lon,lat,verbose=True,reshape_space=False):
         2) pcs  [time, PC] PC timeseries calculated from eof_simple
         3) lat  [lat] Latitude values
         4) lon  [lon] Longitude values
-        OPTIONAL ARGS
-        5) verbose BOOL - set to true to print messages about flipping
-        6) reshape_space BOOL - separate space dim to lat x lon
     
     outputs:
         1) eofs [space, PC]
@@ -87,10 +84,8 @@ def check_ENSO_sign(eofs,pcs,lon,lat,verbose=True,reshape_space=False):
             eofs[:,:,n] *= -1
             pcs[:,n] *= -1
     
-    if reshape_space:
-        eofs = eofs.transpose(1,0,2).reshape(nlat*nlon,npcs)
-    else:
-        eofs = eofs.transpose(1,0,2) # Switch back to lat x lon x pcs
+
+    eofs = eofs.transpose(1,0,2).reshape(nlat*nlon,npcs) # Switch back to lat x lon x pcs
     
     return eofs,pcs
     
@@ -135,7 +130,9 @@ print("Opened in %.2fs"%(time.time()-st))
 # dsanom = dsall - dsall.groupby('time.month').mean('time')
 # print("Monthly Anomalies computed in %.2fs"%(time.time()-st))
 
-
+# Apply Landice Mask
+mask = np.load('/home/glliu/01_Data/00_Scrap/landicemask_enssum.npy')
+dsall *= mask[None,:,:]
 
 # Slice to region
 dsreg = dsall.sel(lon=slice(bbox[0],bbox[1]),lat=slice(bbox[2],bbox[3]))
@@ -150,31 +147,67 @@ print("Data loaded in %.2fs"%(time.time()-st))
 
 #%% Calculate ENSO
 
+# Apply Area Weight
+_,Y = np.meshgrid(lon,lat)
+wgt = np.sqrt(np.cos(np.radians(Y))) # [lat x lon]
+ts = ts * wgt[None,:,:]
+
 # Reshape for ENSO calculations
 ntime,nlat,nlon = ts.shape 
 ts = ts.reshape(ntime,nlat*nlon) # [time x space]
 ts = ts.T #[space x time]
 
+# Remove NaN points
+okdata,knan,okpts = proc.find_nan(ts,1) # Find Non-Nan Points
+oksize = okdata.shape[0]
+
 # Calcuate monthly anomalies
-ts = ts.reshape(nlat*nlon,int(ntime/12),12) # [space x yr x mon]
-manom = ts.mean(1)
-tsanom = ts - manom[:,None,:]
-tsanom = tsanom.reshape(nlat*nlon,ntime)
+okdata = okdata.reshape(oksize,int(ntime/12),12) # [space x yr x mon]
+manom = okdata.mean(1)
+tsanom = okdata - manom[:,None,:]
+#tsanom = tsanom.reshape(nlat*nlon,ntime)
+nyr = tsanom.shape[1]
+
+eofall = np.zeros((nlat*nlon,12,pcrem)) *np.nan# [space x month x pc]
+pcall  = np.zeros((nyr,12,pcrem)) *np.nan# [year x month x pc]
+varexpall  = np.zeros((12,pcrem)) * np.nan #[month x pc]
 
 # Compute EOF!!
-st = time.time()
-eofs,pcs,varexp=proc.eof_simple(tsanom,pcrem,1)
-print("Performed EOF in %.2fs"%(time.time()-st))
+for m in range(12):
+    
+    # Perform EOF
+    st = time.time()
+    eofsok,pcs,varexp=proc.eof_simple(tsanom[:,:,m],pcrem,1)
+    #print("Performed EOF in %.2fs"%(time.time()-st))
 
-# Correct ENSO Signs
-eofs,pcs = check_ENSO_sign(eofs,pcs,lon,lat,verbose=True,reshape_space=True)
+    # Place back into full array
+    eofs = np.zeros((nlat*nlon,pcrem)) * np.nan
+    eofs[okpts,:] = eofsok   
+
+    # Correct ENSO Signs
+    eofs,pcs = check_ENSO_sign(eofs,pcs,lon,lat,verbose=True)
+    
+    
+    # Save variables
+    eofall[:,m,:] = eofs.copy()
+    pcall[:,m,:] = pcs.copy()
+    varexpall[m,:] = varexp.copy()
+    
+    print("Completed month %i in %.2fs"%(m+1,time.time()-st))
+
+# Replace data back with nan points
+    
+    
 
 # Save Output
+st = time.time()
 np.savez(outpath+outname,**{
-         'eofs': eofs,
-         'pcs': pcs,
-         'varexp': varexp,
+         'eofs': eofall,
+         'pcs': pcall,
+         'varexp': varexpall,
          'lon': lon,
          'lat':lat,
          'times':times}
         )
+
+print("Data saved in %.2fs"%(time.time()-st))
