@@ -30,12 +30,8 @@ outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping
 ensofile = "EOF_ENSO_PIC_SLAB.npz" # Name of the file containing ENSO indices (.npz)
 ensoname = "pcs" # Name of the ENSO Index (PC) variable
 
-# Land-ice mask
-maskfile = "/home/glliu/01_Data/00_Scrap/landicemask_enssum.npy" # .npy file containing landice mask
-
 # Variables to process
 vnames = ["SHFLX","LHFLX","FSNS","FLNS"]
-
 
 # Removal choices
 pcrem     = 2 # Number of EOFs to remove
@@ -151,10 +147,6 @@ for v,vname in enumerate(vnames):
     st = time.time()
     dsall = xr.open_mfdataset(nclist,concat_dim='time',preprocess=preprocess)
     #print("Opened in %.2fs"%(time.time()-st))
-    
-    # Apply Landice Mask (this step might not be needed, can mask out values at end!)
-    # mask = np.load(maskfile)
-    # dsall *= mask[None,:,:]
     
     # Read out the variables (bottleneck step here) [time x lat x lon]
     st = time.time()
