@@ -33,7 +33,7 @@ ensofile = "EOF_ENSO_PIC_%s.npz" % mconfig # Name of the file containing ENSO in
 ensoname = "pcs" # Name of the ENSO Index (PC) variable
 
 # Variables to process
-vnames = ["TS","SHFLX","LHFLX","FSNS","FLNS"]
+vnames = ["TS"]#,"SHFLX","LHFLX","FSNS","FLNS"]
 
 # Removal choices
 pcrem     = 2 # Number of EOFs to remove
@@ -124,7 +124,10 @@ for v,vname in enumerate(vnames):
         
     # Set path
     ncpath = '%satm/proc/tseries/monthly/%s/' % (varpath,vname)
-    ncsearch = 'e.e11.E1850C5CN.f09_g16.001.cam.h0.%s.*.nc' % vname
+    if mconfig =="SLAB":
+        ncsearch = 'e.e11.E1850C5CN.f09_g16.001.cam.h0.%s.*.nc' % vname
+    else:
+        ncsearch = 'b.e11.B1850C5CN.f09_g16.005.cam.h0.%s.*.nc' % vname
     nclist = glob.glob(ncpath+ncsearch)
     nclist.sort()
     
