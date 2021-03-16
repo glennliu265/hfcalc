@@ -5,6 +5,7 @@ Created on Sun Nov 15 15:23:17 2020
 
 Remove the ENSO Component of a timeseries
 
+Currently works with CESM1 PIC (SLAB)
 
 @author: gliu
 """
@@ -27,11 +28,12 @@ varpath = "/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/" # Path t
 outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/02_ENSOREM/" # Output Path
 
 # Name of the ENSO file
-ensofile = "EOF_ENSO_PIC_SLAB.npz" # Name of the file containing ENSO indices (.npz)
+mconfig  = "FULL"
+ensofile = "EOF_ENSO_PIC_%s.npz" % mconfig # Name of the file containing ENSO indices (.npz)
 ensoname = "pcs" # Name of the ENSO Index (PC) variable
 
 # Variables to process
-vnames = ["SHFLX","LHFLX","FSNS","FLNS"]
+vnames = ["TS","SHFLX","LHFLX","FSNS","FLNS"]
 
 # Removal choices
 pcrem     = 2 # Number of EOFs to remove
@@ -39,6 +41,10 @@ ensolag   = 1 # Lag between Variable and ENSO (Variable lags ENSO by _ months)
 monwin    = 3 # Moving window of months to consider (3 months centered around 1)
 savepat   = True # Set to true to save ENSO patterns
 reduceyr  = True # Reduce time-period to account of lags and year crossings 
+
+if mconfig =="FULL":
+    outpath = outpath + '/FULL/'
+
 
 #%% Functions
 
@@ -165,7 +171,7 @@ for v,vname in enumerate(vnames):
         vanom=vanom[dropyr:,:,:,:]
     nyr,nmon,nlat,nlon = vanom.shape
     
-    # Reshape to comebine spatial dimensions
+    # Reshape to combine spatial dimensions
     vanom  = vanom.reshape(nyr,nmon,nlat*nlon) # [year x mon x space]
     vout   = vanom.copy()
     
