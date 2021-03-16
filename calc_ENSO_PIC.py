@@ -27,7 +27,7 @@ from amv import proc
 #%% User Edits
 
 # Mode
-mode = 'SLAB' # "SLAB or FULL"
+mode = 'FULL' # "SLAB or FULL"
 
 # TS [time lat lon]
 varkeep = ['TS','time','lat','lon','lev'] 
@@ -40,7 +40,7 @@ bbox = [120, 290, -20, 20]
 
 # Outpath
 outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/ENSO/"
-outname = "EOF_ENSO_PIC_SLAB.npz"
+outname = "EOF_ENSO_PIC_%s.npz" % mode
 
 #%% Functions 
 def check_ENSO_sign(eofs,pcs,lon,lat,verbose=True):
