@@ -115,7 +115,7 @@ ncpath = r'/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/t
 if mode == 'SLAB':
     ncsearch = 'e.e11.E1850C5CN.f09_g16.001.cam.h0.TS.*.nc'
 elif mode == 'FULL':
-    ncsearch = 'b.b11.E1850C5CN.f09_g16.001.cam.h0.TS.*.nc'
+    ncsearch = 'b.e11.B1850C5CN.f09_g16.005.cam.h0.TS.*.nc'
 nclist = glob.glob(ncpath+ncsearch)
 nclist.sort()
 nclist
