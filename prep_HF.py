@@ -27,10 +27,15 @@ import cartopy.feature as cfeature
 
 #%%
 
-datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/SLAB_PIC/"
-outpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/Weekly_Meetings/"
-lipath = "%slandicemask_enssum.npy" % datpath # Land ice mask (.npy file)
-llpath = "%s../CESM1_LATLON.mat" % datpath # Lat/Lon File
+
+datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/03_HFCALC/FULL/"
+outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/03_HFCALC/proc/"
+#datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/SLAB_PIC/"
+#outpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/Weekly_Meetings/"
+lipath = "/home/glliu/01_Data/00_Scrap/landicemask_enssum.npy"
+llpath = "/home/glliu/01_Data/CESM1_LATLON.mat"
+#lipath = "%slandicemask_enssum.npy" % datpath # Land ice mask (.npy file)
+#llpath = "%s../CESM1_LATLON.mat" % datpath # Lat/Lon File
 
 # Experiment Parameters ----
 vname = 'NHFLX'
@@ -38,10 +43,10 @@ lags = [1,2] # Lags to include
 lagstr = "1-3" # Labeling for plots (DONT FORGET TO CHANGE!)
 
 # Significance Testing Results
-mode  = 2 # (1) No mask (2) SST only (3) Flx only (4) Both
-p     = 0.01
+mode  = 4 # (1) No mask (2) SST only (3) Flx only (4) Both
+p     = 0.05
 tails = 2
-dof   = 901 - 1 - 2 - 2
+dof   = 1898 - 1 - 2 - 2
 
 
 # ENSO Removal Options
@@ -54,11 +59,13 @@ emonwin = 3 # Month window of ENSO Removal
 monwin  = 3 # Window of months
 lagname = '123' # Lags to include
 flux    = 'NHFLX'
+mconfig = "FULL"
 
 # Save options
 savevar = 1 # option to save variables
 
 # Plotting Options
+plotfigs = False
 bbox = [280-360, 360-360, 0, 70]
 
 ensoexp = "lag%i_pcs%i_monwin%i" % (ensolag,pcrem,emonwin)
@@ -142,62 +149,63 @@ dampingw *= -1
 if savevar == 1:
     # Save variables, matching matlab script output
     savedict = {'damping':dampingw, 'LON1': lon1, 'LAT':lat }
-    outname = "%sSLAB_PIC_%sdamping_monwin%i_sig%03d_dof%03d_mode%i.mat" % (datpath,flux.lower(),monwin,p*100,dof,mode)
+    outname = "%s%s_PIC_%sdamping_monwin%i_sig%03d_dof%03d_mode%i.mat" % (datpath,mconfig,flux.lower(),monwin,p*100,dof,mode)
     savemat(outname,savedict)
     print("Saved data to %s" % outname)
 
 
-#%% Vizualize the results ----
-
-#% Just plot the damping values
-fig,ax = plt.subplots(1,1,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(5,4))
-cint = np.arange(-50,55,5)
-ax = viz.init_map(bbox,ax=ax)
-pcm = ax.contourf(lon1,lat,np.mean(dampingw,2).T,cint,cmap=cmocean.cm.balance)
-cl = ax.contour(lon1,lat,np.mean(dampingw,2).T,cint,colors="k",linewidths = 0.5)
-ax.clabel(cl,fmt="%i",fontsize=8)
-ax.add_feature(cfeature.LAND,color='k')
-ax.set_title(r"Ann. Mean $\lambda_{a,%s}$ (Lags %s)" % (vname,lagstr)+ "\n"+r"p = %.2f | $\rho$ > %.2f " % (p,corrthres),fontsize=12)
-plt.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.040, pad=0.05)
-plt.savefig(outpath+"SLAB_PIC_%s_Damping__mode%i_monwin%i_lags%s_sig%03d.png"%(vname,mode,monwin,lagstr,p*100),dpi=200)
-
-#%% Just plot specific month .....
-m = 1
-fig,ax = plt.subplots(1,1,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(5,5))
-cint = np.arange(-50,55,5)
-ax = viz.init_map(bbox,ax=ax)
-pcm = ax.contourf(lon1,lat,dampingw[:,:,m-1].T,cint,cmap=cmocean.cm.balance)
-cl = ax.contour(lon1,lat,dampingw[:,:,m-1].T,cint,colors='k',linewidths = 0.5)
-ax.clabel(cl,fmt="%i",fontsize=12)
-ax.add_feature(cfeature.LAND,color='gray')
-ax.set_title(r"Month: %i $\lambda_{a,%s}$ (Lags %s)" % (m,vname,lagstr)+ "\n"+r"p = %.2f | $\rho$ > %.2f " % (p,corrthres),fontsize=12)
-plt.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.040, pad=0.05)
-plt.savefig(outpath+"SLAB_PIC_%s_Damping_month%i_mode%i_monwin%i_lags%s_sig%03d.png"%(vname,m,mode,monwin,lagstr,p*100),dpi=200)
-#%% Make Plot of success and damping values
-
-fig,axs = plt.subplots(1,2,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(6,4))
-
-bbox = [-60,10,50,75]
-
-ax = axs[0]
-cint = np.arange(0,1.1,.1)
-ax = viz.init_map(bbox,ax=ax)
-pcm = ax.contourf(lon,lat,mfreq.T/maxscore,cint,cmap=cmap)
-cl = ax.contour(lon,lat,mfreq.T/maxscore,cint,colors="k",linewidths = 0.5)
-ax.clabel(cl,np.arange(0,1.2,0.2),fmt="%.1f")
-ax.set_title("% of Sig. Values\n"+ r"Mode = %i, Max = %i " % (mode,maxscore))
-plt.colorbar(pcm,ax=ax,orientation="horizontal")
-#plt.savefig(outpath+"%s_SigPts_monwin%i_lags12_sig%03d.png"%(flux,monwin,p*100),dpi=200)
-
-
-
-ax = axs[1]
-cint = np.arange(-50,55,5)
-ax = viz.init_map(bbox,ax=ax)
-pcm = ax.contourf(lon,lat,np.nanmean(dampseason,2).T,cint,cmap=cmocean.cm.balance)
-cl = ax.contour(lon,lat,np.nanmean(dampseason,2).T,cint,colors="k",linewidths = 0.5)
-ax.clabel(cl,fmt="%i")
-ax.set_title("%s Damping (Ann, Lag, Ens Avg)\n" % flux+ r"| p = %.2f | $\rho$ > %.2f " % (p,corrthres))
-plt.colorbar(pcm,ax=ax,orientation="horizontal")
-plt.savefig(outpath+"%s_Damping_and_SigPts_mode%i_monwin%i_lags12_sig%03d.png"%(flux,mode,monwin,p*100),dpi=200)
+if plotfigs:
+    #%% Vizualize the results ----
+    
+    #% Just plot the damping values
+    fig,ax = plt.subplots(1,1,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(5,4))
+    cint = np.arange(-50,55,5)
+    ax = viz.init_map(bbox,ax=ax)
+    pcm = ax.contourf(lon1,lat,np.mean(dampingw,2).T,cint,cmap=cmocean.cm.balance)
+    cl = ax.contour(lon1,lat,np.mean(dampingw,2).T,cint,colors="k",linewidths = 0.5)
+    ax.clabel(cl,fmt="%i",fontsize=8)
+    ax.add_feature(cfeature.LAND,color='k')
+    ax.set_title(r"Ann. Mean $\lambda_{a,%s}$ (Lags %s)" % (vname,lagstr)+ "\n"+r"p = %.2f | $\rho$ > %.2f " % (p,corrthres),fontsize=12)
+    plt.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.040, pad=0.05)
+    plt.savefig(outpath+"SLAB_PIC_%s_Damping__mode%i_monwin%i_lags%s_sig%03d.png"%(vname,mode,monwin,lagstr,p*100),dpi=200)
+    
+    #%% Just plot specific month .....
+    m = 1
+    fig,ax = plt.subplots(1,1,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(5,5))
+    cint = np.arange(-50,55,5)
+    ax = viz.init_map(bbox,ax=ax)
+    pcm = ax.contourf(lon1,lat,dampingw[:,:,m-1].T,cint,cmap=cmocean.cm.balance)
+    cl = ax.contour(lon1,lat,dampingw[:,:,m-1].T,cint,colors='k',linewidths = 0.5)
+    ax.clabel(cl,fmt="%i",fontsize=12)
+    ax.add_feature(cfeature.LAND,color='gray')
+    ax.set_title(r"Month: %i $\lambda_{a,%s}$ (Lags %s)" % (m,vname,lagstr)+ "\n"+r"p = %.2f | $\rho$ > %.2f " % (p,corrthres),fontsize=12)
+    plt.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.040, pad=0.05)
+    plt.savefig(outpath+"SLAB_PIC_%s_Damping_month%i_mode%i_monwin%i_lags%s_sig%03d.png"%(vname,m,mode,monwin,lagstr,p*100),dpi=200)
+    #%% Make Plot of success and damping values
+    
+    fig,axs = plt.subplots(1,2,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(6,4))
+    
+    bbox = [-60,10,50,75]
+    
+    ax = axs[0]
+    cint = np.arange(0,1.1,.1)
+    ax = viz.init_map(bbox,ax=ax)
+    pcm = ax.contourf(lon,lat,mfreq.T/maxscore,cint,cmap=cmap)
+    cl = ax.contour(lon,lat,mfreq.T/maxscore,cint,colors="k",linewidths = 0.5)
+    ax.clabel(cl,np.arange(0,1.2,0.2),fmt="%.1f")
+    ax.set_title("% of Sig. Values\n"+ r"Mode = %i, Max = %i " % (mode,maxscore))
+    plt.colorbar(pcm,ax=ax,orientation="horizontal")
+    #plt.savefig(outpath+"%s_SigPts_monwin%i_lags12_sig%03d.png"%(flux,monwin,p*100),dpi=200)
+    
+    
+    
+    ax = axs[1]
+    cint = np.arange(-50,55,5)
+    ax = viz.init_map(bbox,ax=ax)
+    pcm = ax.contourf(lon,lat,np.nanmean(dampseason,2).T,cint,cmap=cmocean.cm.balance)
+    cl = ax.contour(lon,lat,np.nanmean(dampseason,2).T,cint,colors="k",linewidths = 0.5)
+    ax.clabel(cl,fmt="%i")
+    ax.set_title("%s Damping (Ann, Lag, Ens Avg)\n" % flux+ r"| p = %.2f | $\rho$ > %.2f " % (p,corrthres))
+    plt.colorbar(pcm,ax=ax,orientation="horizontal")
+    plt.savefig(outpath+"%s_Damping_and_SigPts_mode%i_monwin%i_lags12_sig%03d.png"%(flux,mode,monwin,p*100),dpi=200)
 
