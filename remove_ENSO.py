@@ -33,7 +33,7 @@ ensofile = "EOF_ENSO_PIC_%s.npz" % mconfig # Name of the file containing ENSO in
 ensoname = "pcs" # Name of the ENSO Index (PC) variable
 
 # Variables to process
-vnames = ["TS"]#,"SHFLX","LHFLX","FSNS","FLNS"]
+vnames = ["SHFLX","LHFLX","FSNS","FLNS"]#["TS"]#,"SHFLX","LHFLX","FSNS","FLNS"]
 
 # Removal choices
 pcrem     = 2 # Number of EOFs to remove
