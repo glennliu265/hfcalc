@@ -17,7 +17,8 @@ import cartopy.crs as ccrs
 import cartopy
 
 import sys
-sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
+sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
+#sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
 from amv import proc,viz
 from matplotlib import gridspec
 
