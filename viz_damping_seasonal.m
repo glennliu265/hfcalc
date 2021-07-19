@@ -13,7 +13,7 @@ fluxtype = 'nhflx'
 lonremap  = 1          ; %Set 1 to remap LON from 360 -> -180 (Change [bbox] acc.)
 monwin    = 3          ; %Months considered (1 or 3)
 mode      = 4          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (4) Both
-deg5      = 1          ;% Set to 1 to use smoothed data
+deg5      = 0          ;% Set to 1 to use smoothed data
 ensorem   = 1          ;% Indicate if ENSO was removed
 dof_man   = 82
 p         = 0.20      
@@ -24,18 +24,19 @@ p         = 0.20
 % Bounding Boxes (lon1 lon2 lat1 lat2)
 bbox         = [-100 20 -25 75]; % North Atlantic
 caxischoose  = [-50 50];
-plotpt       = 1
+plotpt       = 0
 topleft      = 0 ;% For seasonal plots, plot the first subplot ont the left
 seasonplot   = 0
 use_contour  = 0
 p2005_plot   = 1
-
+%cint = [-48:8:-2,2:8:48];
+cint = [-50:10:50];
 % -----------------------
 % Set Paths and load data
 projpath = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/';
 addpath('/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/01_Data'); % Path to common data
 addpath('/Users/gliu/') % Path to scripts
-outpath = [projpath,'02_Figures/20200526/'];
+outpath = [projpath,'02_Figures/20200629/'];
 
 if deg5 == 1 
     datpath  = [projpath,'01_Data/5deg/'];
@@ -199,8 +200,8 @@ if seasonplot == 1
     % Color Axis Options
     colormap(m_colmap('diverging',10));
     caxis(caxischoose)
-    colorbar('Location','southoutside','Ticks',[-50:10:50])
-
+    %colorbar('Location','southoutside','Ticks',[-50:10:50])
+    %colorbar('Location','southoutside
     m_coast('patch',[.7, .7, .7], 'edgecolor','black');
     m_grid('tickdir','out','linewi',2,'backgroundcolor','g');
     title(['Annual Average ',upper(fluxtype),' Feedback'],'FontSize',20)
@@ -254,8 +255,9 @@ if p2005_plot == 1
         % Make plot
         m_proj('Miller','long',[bbox(1) bbox(2)],'lat',[bbox(3)  bbox(4)])
         if use_contour == 1
-            m_contourf(LON1,LAT,vplot',[-48:8:-2,2:8:48])
-            colormap(m_colmap('diverging',13));
+            [C,h] = m_contourf(LON1,LAT,vplot',cint);
+            clabel(C,h,'LabelSpacing',250,'FontSize',10);
+            colormap(m_colmap('diverging',10));
         else
             m_pcolor(LON1,LAT,vplot')
             colormap(m_colmap('diverging',10));
@@ -265,23 +267,24 @@ if p2005_plot == 1
         % Color Axis Options
         
         if s == 5
-            colorbar('Location','southoutside')
-            caxis([-50 50])
+            colorbar('Location','southoutside','Ticks',cint)
+            caxis(caxischoose)
         else
-            caxis([-48 48])
+            %colorbar('Location','southoutside','Ticks',cint)
+            caxis(caxischoose)
             title(mlab)
             
         end
     
         % Coastline and Grid Options
         m_coast('patch',[.7, .7, .7], 'edgecolor','black');
-        m_grid('tickdir','out','linewi',2,'backgroundcolor','g');
+        m_grid('tickdir','out','linewi',2,'backgroundcolor','y');
         
     end
     
     % Save Figure 1 (Seasonal Plots)
     figure(1)
-    sgtitle([upper(fluxtype),' Feedback'],'FontSize',20)
+    sgtitle([upper(fluxtype),' Feedback, Ensemble and Lag Average'],'FontSize',20)
     
     set(gcf,'PaperUnits','inches','Position',[10 10 450 475])
 

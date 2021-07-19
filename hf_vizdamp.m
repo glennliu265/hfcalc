@@ -18,20 +18,20 @@
 %  User Input
 %  ------------------------------
 %fluxes = {'RHFLX','THFLX','NHFLX','SHFLX','LHFLX','FSNS','FLNS'};
-fluxes   = {'nhflx'}  ; %Flux to Visualize
+fluxes   = {'flns'}  ; %Flux to Visualize
 
 lonremap  = 1          ; %Set 1 to remap LON from 360 -> -180 (Change [bbox] acc.)
-monlist   = [1:12]       ; %List of months to visualize
+monlist   = [1]       ; %List of months to visualize
 avgmon    = 0          ; %Set 1 to average across all months in monlist
 lag       = [1:2]      ; %List of lags to average over/sum over
-ensnum    = [1:42]     ; %List of ensemble members to average over
+ensnum    = [1:42]      ; %List of ensemble members to average over
 monwin    = 3          ; %Months considered (1mon vs 3mon)
 ensorem   = 1          ; %Set to 1 if enso was removed
 savedamp  = 0          ; % Set to 1 to save damping variables after applying sigtest
-mode      = 2          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (4) Both
+mode      = 4          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (4) Both
 ensavgf   = 1          ; %Set to 1 if you want to take the ensemble average first
 lag1_elim = 0          ;% Set to 1 to eliminate rest of lags if lag 1 fails
-insigNaN  = 1          ;% Set to 1 to change insignificant feedbacks to NaN
+insigNaN  = 0          ;% Set to 1 to change insignificant feedbacks to NaN
 deg5      = 0          ;% Set to 1 to use smoothed data
 %(3) to msk cor, (4) for both, (5) for old threshold, (6) for custom
 %threshold
@@ -40,14 +40,14 @@ deg5      = 0          ;% Set to 1 to use smoothed data
 % MODE6: SET SIGNIFICANCE TESTING OPTIONS
 % -------------------
 % T-Test parameters
-p        = 0.05         ; % p-value that will be used
-tails    = 2             ; % 1 or 2-tailed T-test
+p        = 0.20         ; % p-value that will be used
+tails    = 2           ; % 1 or 2-tailed T-test
 dof_man  = 82            ; % Manual DOF value
 
 % -------------------
 % Point Plot toggle
 % -------------------
-plotpt = 1;
+plotpt = 0;
 lon_find = -72;
 lat_find = 35;
 caxischoose = [-50 50];% Good caxis threshold for THFLX, noisy pixel id
@@ -63,7 +63,7 @@ plot_mask   = 0;
 
 % Set Paths
 projpath = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/';
-outpath  = [projpath,'02_Figures/20200526/'];
+outpath  = [projpath,'02_Figures/20200629/'];
 
 % Add Paths
 
@@ -235,6 +235,7 @@ for i = 1:length(fluxes)
     if lonremap == 1
         if any(LON> 181)        
             [LON1,v] = lon360to180(LON,v);
+            [~,amask] = lon360to180(LON,amask);
         else
             v = v;
             LON1 = LON;
@@ -305,23 +306,32 @@ for i = 1:length(fluxes)
                     movstd = squeeze(msst(:,:,e,imon,lag));
                 else
                     movstd = squeeze(v(:,:,imon,e,lag));
+                    %plotmask = squeeze(amask(:,:,imon,e,lag));
                 end
 
                 %Take mean along third dimension until only lat/lon remain
                 while length(size(movstd)) > 2 
                     movstd = squeeze(nanmean(movstd,3));
+                    %plotmask = squeeze(nanprod(plotmask,3));
                 end 
 
                 %% -------------------------------------------
                 %  2. Create Figure (42 Member Plot)
                 %  -------------------------------------------
+                
                 subplot(6,7,e)
+                %subaxis(6,7,e,'Spacing',0.5)
+                
+                
                 m_proj('Miller','long',[bbox(1) bbox(2)],'lat',[bbox(3)  bbox(4)]) 
                 m_pcolor(LON1,LAT,movstd')
-                colormap(m_colmap('diverging',11));
+                colormap(m_colmap('diverging',10));
                 caxis(caxischoose)
                 m_coast('patch',[.7, .7, .7], 'edgecolor','black');
 
+                % Plot stippling to show significance
+                %stipple(LON1,LAT,plotmask'>0)
+                
                 if plotpt == 1           
                     pval = squeeze(movstd(oidx,aidx));
                     title(['e',num2str(ensnum,'%03d'),': ',num2str(pval,'%.02f')]);
@@ -331,11 +341,13 @@ for i = 1:length(fluxes)
                 end
                 
                 % Set ticks and figure size
-                m_grid('xticklabels',[],'yticklabels',[],'tickdir','out','linest','none','linewi',1,'backgroundcolor','g');
+                %m_grid('xticklabels',[],'yticklabels',[],'tickdir','out','linest','none','linewi',1,'backgroundcolor','g');
+                set(gca,'Color','y')
                 set(gca,'YTickLabel',[]);
                 set(gca,'XTickLabel',[]);
                 set(gcf,'Position',[388 -8 1094 804])
-
+                set(gcf, 'InvertHardcopy', 'off')
+                
                 % Add Point Marker
                 hold on
 
@@ -372,10 +384,11 @@ for i = 1:length(fluxes)
                     '.png'];
             end
 
-            sgtitle(strcat(fluxlab,' Damping; Mon ',num2str(imon,'%02d'),...
+            sgtitle(strcat(fluxlab,' Damping; Mon ',monlab(m),...
                 '; Lag ',stlag,...
                 '; All Ens'),...
                     'FontSize',20);
+            set(gcf,'color','w')
             saveas(gcf,figname,'png')   
             fprintf('\nCompleted month %s',num2str(imon,'%02d'))
             % End conditional for plot allens
@@ -390,17 +403,17 @@ for i = 1:length(fluxes)
             m_proj('Miller','long',[bbox(1) bbox(2)],'lat',[bbox(3)  bbox(4)]) 
             set(gca,'Color','k')
             m_pcolor(LON1,LAT,ensavg')
-            colormap(m_colmap('diverging',11));
+            colormap(m_colmap('diverging',10));
             caxis(caxischoose)
             
-            cints=(caxischoose(2) - caxischoose(1))/10
-            [tn,tl] = divergingticks(caxischoose,11,cints)
+            %cints=(caxischoose(2) - caxischoose(1))/10
+            %[tn,tl] = divergingticks(caxischoose,11,cints)
             
             
-            colorbar('Location','southoutside','Ticks',tn,'TickLabels',tl)
-           
+            %colorbar('Location','southoutside','Ticks',tn,'TickLabels',tl)
+            colorbar('Location','southoutside','Ticks',[-50:10:50])
             m_coast('patch',[.7, .7, .7], 'edgecolor','black');
-            m_grid('tickdir','out','linewi',2,'backgroundcolor','g');
+            m_grid('tickdir','out','linewi',2,'backgroundcolor','yellow');
             pval = ensavg(oidx,aidx);
             
             if plot_oneens == 1
@@ -424,7 +437,7 @@ for i = 1:length(fluxes)
                 m_plot(midptx,midpty,'yo',...
                     'MarkerSize',25,'MarkerEdgeColor','y')
                 
-                title({strcat(fluxlab,' Damping; Mon ',num2str(imon,'%02d'),...
+                title({strcat(fluxlab,' Damping; Mon ',monlab(m),...
                     '; Lag ',stlag,...
                     '; Ens  ',stensnum);['Corr. Thres: ',num2str(corrthres,'%.04f'),'; Pt Value: ',num2str(pval,'%.02f')]},...
                     'FontSize',16)
@@ -434,11 +447,12 @@ for i = 1:length(fluxes)
                     '; Ens  ',stensnum)},...
                     'FontSize',16)
             end
+            set(gcf,'PaperUnits','inches','Position',[10 10 450 475])
             saveas(gcf,figname,'png')
             fprintf('\nCompleted month %s',num2str(imon,'%02d'))
 
 
-        end 
+        end     
         
         % Exit loop if avgmon is selected
         if avgmon == 1

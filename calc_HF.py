@@ -27,11 +27,6 @@ from amv import proc
 datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/02_ENSOREM/FULL/" # Output Path
 outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/03_HFCALC/FULL/" # Output Path
 
-
-
-
-
-
 #%% Functions
 
 def combineflux(fluxname,filepath,downward_positive=True,verbose=False):
@@ -78,7 +73,7 @@ def combineflux(fluxname,filepath,downward_positive=True,verbose=False):
     elif fluxname == 'THFLX':
         inflx = fluxes[2:]
     elif fluxname == 'RHFLX':
-        inflx = fluxes[:]
+        inflx = fluxes[:2]
     
     i = 0
     for f in inflx:
@@ -174,13 +169,13 @@ flux   = 'NHFLX'
 
 #%%
 # Set File Names
-ensoexp = "lag%i_pcs%i_monwin%i.npz" % (ensolag,pcrem,emonwin)
-filepath = datpath+"ENSOREM_%s_"+ensoexp
+ensoexp = "lag%i_pcs%i_monwin%i" % (ensolag,pcrem,emonwin)
+filepath = datpath+"ENSOREM_%s_"+ensoexp + ".npz"
 
 
 # Load the files #[time x lat x lon]
 st = time.time()
-sst = np.load("%sENSOREM_TS_%s"%(datpath,ensoexp),allow_pickle=True)['TS']
+sst = np.load("%sENSOREM_TS_%s.npz"%(datpath,ensoexp),allow_pickle=True)['TS']
 flx = combineflux(flux,filepath,verbose=True)
 print("Data loaded in %.2fs"%(time.time()-st))
 
@@ -236,7 +231,7 @@ elif nlag == 2:
     lagstr = "12"
 else:
     lagstr = str(lags[0])
-    
+
 # Save Damping Parameter
 outname1 = "%s%s_Damping_monwin%i_lags%s_ensorem%i_%s.npy" % (outpath,flux,monwin,lagstr,ensorem,ensoexp)
 np.save(outname1,damping)
@@ -244,7 +239,6 @@ np.save(outname1,damping)
 # Save Autocorrelation
 outname = "%sSST_Autocorrelation_monwin%i_lags%s_ensorem%i_%s.npy" % (outpath,monwin,lagstr,ensorem,ensoexp)
 np.save(outname,autocorr)
-
 
 # Save Damping Parameter
 outname = "%s%s_Crosscorrelation_monwin%i_lags%s_ensorem%i_%s.npy" % (outpath,flux,monwin,lagstr,ensorem,ensoexp)
@@ -255,9 +249,7 @@ import matplotlib.pyplot as plt
 plt.pcolormesh(damping[0,0,:,:],vmin=-50,vmax=50,cmap='seismic'),plt.colorbar(),plt.show()  
 plt.pcolormesh(autocorr[1,0,:,:],vmin=-1,vmax=1,cmap='seismic'),plt.colorbar(),plt.show()      
     
-    
 
-    
 
 
 

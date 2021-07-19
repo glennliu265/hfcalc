@@ -40,8 +40,8 @@ llpath = "/home/glliu/01_Data/CESM1_LATLON.mat"
 
 # Experiment Parameters ----
 vname = 'NHFLX'
-lags = [1,2] # Lags to include
-lagstr = "1-3" # Labeling for plots (DONT FORGET TO CHANGE!)
+lags = [1,2,3] # Lags to include
+lagstr = "1-2" # Labeling for plots (DONT FORGET TO CHANGE!)
 
 # Significance Testing Results
 mode  = 4 # (1) No mask (2) SST only (3) Flx only (4) Both
@@ -77,16 +77,14 @@ testres = ""
 #%% Functions
 
 def calc_corrthres(p,tails,dof):
-    
+
     ptilde    = 1-p/tails
     critval   = stats.t.ppf(ptilde,dof)
     corrthres = np.sqrt(1/ ((dof/np.power(critval,2))+1))
-    
     return corrthres
 
 
 #%%
-
 # Load in the damping and correlation files
 damping = np.load("%s%s_Damping_%s.npz.npy"% (datpath,vname,expin))  # [mon lag lat lon] 
 rsst = np.load("%sSST_Autocorrelation_%s.npz.npy"% (datpath,expin))  # [mon lag lat lon] 
@@ -129,13 +127,22 @@ elif mode == 4:
     mult = 2
 
 # Apply mask
-dampingt = damping * mtot
+dampingt = damping * mall
 
+dampingmasked = dampingt.copy()
 #%% Further Processing
 
 # Average over selected lags
 ilags = [l-1 for l in lags] # get indices
 dampingt = dampingt[:,ilags,:,:].mean(1).squeeze()
+
+
+
+lagstr = ""
+for l in lags:
+    lagstr += str(l)
+    
+
 
 # Apply Land/Ice Mask
 dampingm = dampingt * limask[None,:,:]
@@ -209,4 +216,77 @@ if plotfigs:
     ax.set_title("%s Damping (Ann, Lag, Ens Avg)\n" % flux+ r"| p = %.2f | $\rho$ > %.2f " % (p,corrthres))
     plt.colorbar(pcm,ax=ax,orientation="horizontal")
     plt.savefig(outpath+"%s_Damping_and_SigPts_mode%i_monwin%i_lags12_sig%03d.png"%(flux,mode,monwin,p*100),dpi=200)
+
+#% Just plot the damping values
+fig,ax = plt.subplots(1,1,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(5,4))
+cint = np.arange(-50,55,5)
+ax = viz.init_map(bbox,ax=ax)
+pcm = ax.contourf(lon1,lat,np.mean(dampingw,2).T,cint,cmap=cmocean.cm.balance)
+cl = ax.contour(lon1,lat,np.mean(dampingw,2).T,cint,colors="k",linewidths = 0.5)
+ax.clabel(cl,fmt="%i",fontsize=10)
+ax.add_feature(cfeature.LAND,color='gray')
+ax.set_title(r"CESM-SLAB Annual Mean $\lambda_{a,%s}$ (Avg. Lags %s)" % (vname,lagstr)+ "\n"+r"DOF= %i | p = %.2f | R > %.2f " % (dof,p,corrthres),fontsize=12)
+plt.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.05, pad=0.05)
+plt.savefig(outpath+"SLAB_PIC_%s_Damping_mode%i_monwin%i_lags%s_sig%03d.png"%(vname,mode,monwin,lagstr,p*100),dpi=200)
+
+#%% Just plot specific month .....
+m = 1
+fig,ax = plt.subplots(1,1,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(5,4))
+cint = np.arange(-70,75,5)
+ax = viz.init_map(bbox,ax=ax)
+pcm = ax.contourf(lon1,lat,dampingw[:,:,m-1].T,cint,cmap=cmocean.cm.balance)
+cl = ax.contour(lon1,lat,dampingw[:,:,m-1].T,cint,colors='k',linewidths = 0.5)
+ax.clabel(cl,fmt="%i",fontsize=10)
+ax.add_feature(cfeature.LAND,color='gray')
+ax.set_title(r"CESM-SLAB %s $\lambda_{a,%s}$ (Lags %s)" % (viz.return_mon_label(m),vname,lagstr)+ "\n"+r"DOF= %i | p = %.2f | R > %.2f " % (dof,p,corrthres),fontsize=12)
+plt.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.040, pad=0.05)
+plt.savefig(outpath+"SLAB_PIC_%s_Damping_month%i_mode%i_monwin%i_lags%s_sig%03d.png"%(vname,m,mode,monwin,lagstr,p*100),dpi=200)
+#%% Make Plot of success and damping values
+
+fig,axs = plt.subplots(1,2,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(6,4))
+
+bbox = [-60,10,50,75]
+
+ax = axs[0]
+cint = np.arange(0,1.1,.1)
+ax = viz.init_map(bbox,ax=ax)
+pcm = ax.contourf(lon,lat,mfreq.T/maxscore,cint,cmap=cmap)
+cl = ax.contour(lon,lat,mfreq.T/maxscore,cint,colors="k",linewidths = 0.5)
+ax.clabel(cl,np.arange(0,1.2,0.2),fmt="%.1f")
+ax.set_title("% of Sig. Values\n"+ r"Mode = %i, Max = %i " % (mode,maxscore))
+plt.colorbar(pcm,ax=ax,orientation="horizontal")
+#plt.savefig(outpath+"%s_SigPts_monwin%i_lags12_sig%03d.png"%(flux,monwin,p*100),dpi=200)
+
+
+
+ax = axs[1]
+cint = np.arange(-50,55,5)
+ax = viz.init_map(bbox,ax=ax)
+pcm = ax.contourf(lon,lat,np.nanmean(dampseason,2).T,cint,cmap=cmocean.cm.balance)
+cl = ax.contour(lon,lat,np.nanmean(dampseason,2).T,cint,colors="k",linewidths = 0.5)
+ax.clabel(cl,fmt="%i")
+ax.set_title("%s Damping (Ann, Lag, Ens Avg)\n" % flux+ r"| p = %.2f | $\rho$ > %.2f " % (p,corrthres))
+plt.colorbar(pcm,ax=ax,orientation="horizontal")
+plt.savefig(outpath+"%s_Damping_and_SigPts_mode%i_monwin%i_lags12_sig%03d.png"%(flux,mode,monwin,p*100),dpi=200)
+
+#%% Plot differences in damping pattern
+
+lonf = 330
+latf = 50
+
+klon,klat = proc.find_latlon(lonf,latf,lon,lat)
+
+damppt = dampingmasked[:,:,klat,klon]
+
+
+fig,ax = plt.subplots(1,1)
+for i in range(3):
+    ax.plot(damppt[:,i],label="Lag %i"% (i+1))
+ax.legend()
+
+
+
+
+#dampingw
+
 

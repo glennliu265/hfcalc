@@ -16,7 +16,7 @@ mode      = 4          ; % (1) No Sig Testing, (2) SST testing (3) Flx testing (
 ensavgf   = 1          ; %Set to 1 if you want to take the ensemble average first
 lag1_elim = 0          ;% Set to 1 to eliminate rest of lags if lag 1 fails
 insigNaN  = 0          ;% Set to 1 to change insignificant feedbacks to NaN
-deg5      = 1          ;% Set to 1 to use smoothed data
+deg5      = 0          ;% Set to 1 to use smoothed data
 ensorem   = 1          ;% Indicate if ENSO was removed
 
 % Shouldn't change these, but I'll put these here for now...
@@ -27,7 +27,7 @@ ensnum    = [1:42]     ; %List of ensemble members
 % SET SIGNIFICANCE TESTING OPTIONS
 % -------------------
 % T-Test parameters
-p        = 0.20         ; % p-value that will be used
+p        = 0.05         ; % p-value that will be used
 tails    = 2             ; % 1 or 2-tailed T-test
 dof_man  = 82            ; % Manual DOF value
 
