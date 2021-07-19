@@ -167,7 +167,6 @@ def prep_HF(damping,rsst,rflx,p,tails,dof,mode,returnall=False):
     -------
         1) dampingmasked [month x lag x lat x lon]
         
-    
     """
     # Determine correlation threshold
     ptilde    = 1-p/tails
@@ -196,11 +195,30 @@ def prep_HF(damping,rsst,rflx,p,tails,dof,mode,returnall=False):
         mall = msst * mflx
         mult = 2
     
-    # Apply Mask
+    # Apply Significance Mask
     dampingmasked = damping * mall
     
     if returnall:
         return dampingmasked,mtot,mult
     return dampingmasked
+
+def postprocess(dampingmasked,limask,sellags,lon):
+    
+    # Inputs
+    ## Dampingmasked [month x lag x lat x lon]
+    ## limask [lat x lon]
+    
+    # Select lags, apply landice mask
+    mchoose = dampingmasked[:,sellags,:,:] * limask[None,:,:]
+    
+    # Flip longiude coordinates ([mon lat lon] --> [lon x lat x mon])
+    lon1,dampingw = proc.lon360to180(lon,mchoose.transpose(2,1,0))
+
+    # Multiple by 1 to make positive upwards
+    dampingw *= -1
+    return dampingw
+    
+    
+    
     
     
