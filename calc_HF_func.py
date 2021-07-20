@@ -3,11 +3,154 @@
 """
 
 Attempts to write functions to calculate heat flux
+Testing script
 
 Created on Mon Jul 19 16:14:32 2021
 
 @author: gliu
 """
+
+import xarray as xr
+import numpy as np
+import glob
+import time
+
+import sys
+
+import matplotlib.pyplot as plt
+
+
+
+#%%
+stormtrack = 0
+mconfig    = "SLAB_FULL" 
+
+
+
+if stormtrack == 1:
+    # Module Paths
+    sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
+    sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
+elif stormtrack == 0:
+    # Module Paths
+    sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/03_Scripts/stochmod/model/")
+    sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
+    
+    datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
+    outpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20210722"
+
+    lipath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
+    llpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
+
+from amv import proc
+import scm
+
+#mconfig = "SLAB_FULL"
+#datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/02_ENSOREM/%s/" % mconfig
+#outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/03_HFCALC/%s/"  % mconfig
+
+
+tails = 2
+p     = 0.05
+mode  = 1
+
+#%% Quick fill-in functions
+
+def load_dampraw(mconfig,datpath):
+    inpaths = datpath+"CESM-"+mconfig+"-Damping/"
+    damping = np.load(inpaths+"NHFLX_Damping_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+    rflx = np.load(inpaths+"NHFLX_Crosscorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+    rsst = np.load(inpaths+"SST_Autocorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+    return damping,rsst,rflx
+
+
+#%% Test the prep_HF script
+
+
+# Load some data
+
+
+# Note this only works locally, need to make equivalent on stormtrack
+if stormtrack == 0:
+    lon,lat=scm.load_latlon(datpath=llpath,lon360=True)
+    lon180,_ = scm.load_latlon(datpath=llpath)
+    limask = np.load(lipath+"../landicemask_enssum.npy")
+
+
+
+mconfigs =["PIC-SLAB","PIC-FULL"]
+dofs     =[898 - 1 - 2 - 2, 1898 - 1 - 2 - 2] 
+
+dampings   = []
+rssts      = []
+rflxs      = []
+dampingfin = []
+for i,mcf in enumerate(mconfigs):
+
+    # Load Data
+    a,b,c = load_dampraw(mcf,datpath)
+    dampings.append(a)
+    rssts.append(b)
+    rflxs.append(c)
+    
+    # Apply Masks
+    d = scm.prep_HF(a,b,c,p,tails,dofs[i],mode)
+    #dampingfin.append(d)
+    
+    # Postprocess
+    dampingw = scm.postprocess_HF(d,limask,[0],lon)
+    dampingfin.append(dampingw)
+
+#%% Plot comparison
+lonf = -30
+latf = 50
+klon,klat = proc.find_latlon(lonf,latf,lon180,lat)
+klon360,_ = proc.find_latlon(lonf+360,latf,lon,lat)
+
+#%% Load data from CESM-FULL Historical
+
+ds = xr.open_dataset("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/allens_nhflxdamping_monwin3_sig020_dof082_mode4_lag1.nc")
+
+lbdpt = ds.sel(lon=330,lat=50,method='nearest')
+dampfull = lbdpt.NHFLX_Damping.values
+
+#%%
+
+
+
+fig,ax = plt.subplots(1,1)
+for i in range(2):
+    div = 1
+    # if i == 1:
+    #     div = 2
+    ax.plot(dampingfin[i][klon,klat,:]/div,label=mconfigs[i])
+    
+for i in range(42):
+    ax.plot(dampfull[:,i],label="",color='gray',alpha=0.25)
+ax.plot(dampfull[:,-1],label="HTR-FULL (member)",color='gray',alpha=0.25)
+ax.plot(dampfull.mean(1),label="HTR-FULL (ens-avg)",color='k',alpha=1)
+
+ax.legend()
+ax.grid(True,ls='dotted')
+ax.set_xlabel("Months")
+ax.set_ylabel("$\lambda_a$ (W/m2/degC)")
+
+
+
+
+
+#Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/Data/CESM-SLAB_FULL-Damping/'
+#/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data
+#%%
+
+
+
+
+
+
+
+
+
 def indexwindow(invar,m,monwin,combinetime=False,verbose=False):
     """
     index a specific set of months/years for an odd sliding window
@@ -71,7 +214,7 @@ def calc_HF(sst,flx,lags,monwin,verbose=True):
     
     Inputs
     ------
-        1) sst     : ARRAY [time x lat x lon] 
+        1) sst     : ARRAY [year x  x lat x lon] 
             sea surface temperature anomalies
         2) flx     : ARRAY [time x lat x lon]
             heat flux anomalies
