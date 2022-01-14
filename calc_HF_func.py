@@ -25,9 +25,8 @@ import sys
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 
-#%%
+#%% Set working location
 stormtrack = 0
-mconfig    = "SLAB_FULL" 
 
 if stormtrack == 1:
     # Module Paths
