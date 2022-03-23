@@ -87,8 +87,8 @@ def calc_corrthres(p,tails,dof):
 #%%
 # Load in the damping and correlation files
 damping = np.load("%s%s_Damping_%s.npz.npy"% (datpath,vname,expin))  # [mon lag lat lon] 
-rsst = np.load("%sSST_Autocorrelation_%s.npz.npy"% (datpath,expin))  # [mon lag lat lon] 
-rflx = np.load("%s%s_Crosscorrelation_%s.npz.npy"% (datpath,vname,expin))  # [mon lag lat lon] 
+rsst    = np.load("%sSST_Autocorrelation_%s.npz.npy"% (datpath,expin))  # [mon lag lat lon] 
+rflx    = np.load("%s%s_Crosscorrelation_%s.npz.npy"% (datpath,vname,expin))  # [mon lag lat lon] 
 
 # Load land ice mask and lat/lon
 limask = np.load(lipath) # [lat x lon]
