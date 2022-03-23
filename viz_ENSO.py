@@ -16,14 +16,16 @@ import cartopy
 import sys
 sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
 from amv import proc,viz
-from matplotlib import gridspec
+#from matplotlib import gridspec
 import cartopy.feature as cfeature
 
 
 #%% User Edits
 
-datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/SLAB_PIC/"
-npzname = "EOF_ENSO_PIC_SLAB.npz"
+datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/ENSO_PIC/"
+
+# "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/SLAB_PIC/"
+npznames = ("EOF_ENSO_PIC_FULL.npz","EOF_ENSO_PIC_SLAB.npz")
 outpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/Weekly_Meetings/"
 
 # Subset data for enso index calculation
@@ -31,16 +33,19 @@ bbox = [120, 290, -25, 25]
 
 
 
-
-# Load data
-ld = np.load(datpath+npzname,allow_pickle=True)
-eofs = ld['eofs']
-pcs = ld['pcs']
-varexp=ld['varexp']
-lon = ld['lon']
-lat = ld['lat']
-times = ld['times']
-
+for i in range(2):
+    npzname = npznames[i]
+    
+    # Load data
+    ld = np.load(datpath+npzname,allow_pickle=True)
+    
+    eofs   = ld['eofs']
+    pcs    = ld['pcs']
+    varexp = ld['varexp']
+    lon    = ld['lon']
+    lat    = ld['lat']
+    times  = ld['times']
+#%%
 
 # Find dimensions and separate out space
 nlon = lon.shape[0]
@@ -62,7 +67,13 @@ cint = np.arange(-1,1.1,.1)
 n = 2
 m = 0
 
-fig,axs = plt.subplots(1,1,gridspec_kw={'height_ratios':[3,1]},subplot_kw={'projection': ccrs.PlateCarree(central_longitude=180)})
+
+
+
+
+#fig,axs = plt.subplots(1,1,gridspec_kw={'height_ratios':[3,1]},subplot_kw={'projection': ccrs.PlateCarree(central_longitude=180)})
+fig,axs = plt.subplots(1,1,subplot_kw={'projection': ccrs.PlateCarree(central_longitude=180)})
+
 ax = axs
 ax = viz.init_map(bbox,ax=ax)
 pcm = ax.contourf(lon,lat,eofs[:,:,m,n],levels=cint,cmap=cmap,transform = ccrs.PlateCarree())
