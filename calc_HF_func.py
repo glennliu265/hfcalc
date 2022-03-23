@@ -53,11 +53,14 @@ import scm
 
 tails      = 2
 p          = 0.05
-mode       = 4
-sellags    = [0,]
+mode       = 4 # 1 = No Mask; 2 = SST autocorr; 3 --> SST-FLX cross corr; 4 = Both
+sellags    = [0]
 maskval    = 0 # Set the masking value
 saveoutput = True
 
+lagstr = "lag"
+for i in sellags:
+    lagstr += str(sellags[i]+1)
 mons3       = ('Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec')
 bboxplot = [-100,20,0,80]
 #%% Quick fill-in functions
@@ -65,8 +68,8 @@ bboxplot = [-100,20,0,80]
 def load_dampraw(mconfig,datpath):
     inpaths = datpath+"CESM-"+mconfig+"-Damping/"
     damping = np.load(inpaths+"NHFLX_Damping_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
-    rflx = np.load(inpaths+"NHFLX_Crosscorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
-    rsst = np.load(inpaths+"SST_Autocorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+    rflx    = np.load(inpaths+"NHFLX_Crosscorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+    rsst    = np.load(inpaths+"SST_Autocorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
     return damping,rsst,rflx
 
 
@@ -74,7 +77,6 @@ def load_dampraw(mconfig,datpath):
 from scipy import stats
 
 # Load some data
-
 # Note this only works locally, need to make equivalent on stormtrack
 if stormtrack == 0:
     lon,lat=scm.load_latlon(datpath=llpath,lon360=True)
@@ -129,23 +131,46 @@ for i,mcf in enumerate(mconfigs):
     malls.append(mall)
     
 
+#%% For Mode 5, replace insignificant values in FULL with those from SLAB
+debug = False
+
+if mode == 5:
+    idfull  = malls[1] == 0 # Insignificant points in FULL
+    print("Replacing %i points"%(np.sum(idfull.flatten())))
+    dampingfin[1][idfull] = dampingfin[0][idfull] # Substitute Corresponding points
+    malls[1][idfull] = malls[0][idfull] # Substitute for mask as well
+    
+    
+    if debug:
+        plt.pcolormesh(idfull[...,0].T),plt.colorbar()
+        test = dampingfin[1].copy()
+        test[idfull] = dampingfin[0][idfull] # Replace with values
+        diff = dampingfin[1] - test # Take Difference
+        plt.pcolormesh(diff[:,:,0].T),plt.colorbar()
+    
+    
+    
+    
+
+
+
 #%% Save the Output
 # -----------------
 if saveoutput:
     # Save Full PIC
     picout = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
-    outname = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i.npy" % (picout,dofs[1],mode)
+    outname = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s.npy" % (picout,dofs[1],mode,lagstr)
     np.save(outname,dampingfin[1])
     print("Saved to "+outname)
     
     # Save SLAB PIC
-    outname = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i.npy" % (picout,dofs[0],mode)
+    outname = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s.npy" % (picout,dofs[0],mode,lagstr)
     np.save(outname,dampingfin[0])
     print("Saved to "+outname)
     
     # Save the masks as well
-    outname1 = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask.npy" % (picout,dofs[0],mode)
-    outname0 = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask.npy" % (picout,dofs[1],mode)
+    outname1 = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s.npy" % (picout,dofs[0],mode,lagstr)
+    outname0 = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s.npy" % (picout,dofs[1],mode,lagstr)
     outnames = [outname1,outname0]
     for i in range(2):
         np.save(outnames[i],malls[i])
@@ -154,13 +179,13 @@ if saveoutput:
     
     
     
-
 #%% Select point for comparison
 # -----------------------------
 lonf = -30
 latf = 50
 klon,klat = proc.find_latlon(lonf,latf,lon180,lat)
 klon360,_ = proc.find_latlon(lonf+360,latf,lon,lat)
+
 
 #%% Make some plots (Annual Heat Flux without the mask)
 # -----------------------------------------------------
@@ -316,7 +341,6 @@ dampfullall = dampfullall.reshape(nlat,nlon,nmon*nens).transpose(1,0,2)
 _,dampfullall = proc.lon360to180(lon,dampfullall)
 dampfullall = dampfullall.reshape(nlon,nlat,nmon,nens)
 
-
 #%% Plot the comparison at the selected point
 
 fig,ax = plt.subplots(1,1)
@@ -386,7 +410,6 @@ for im in tqdm(range(12)):
 clevels = np.arange(-15,17,2)
 clims = [clevels[0],clevels[-1]]
 
-
 # Plot the comparison
 fig,axs = plt.subplots(1,3,figsize=(14,4),subplot_kw={'projection': ccrs.PlateCarree()})
 
@@ -411,7 +434,6 @@ ax.contour(lon180,lat,plotdiff.T,levels=[0],colors="k",linewidths=0.75)
 plt.suptitle("Differences in $\lambda_a$ (W/m2/degC/sec)",fontsize=14,y=0.98)
 fig.colorbar(pcm,ax=axs.ravel().tolist())
 plt.savefig("%sLambda_Comparison_%iLags_AnnAvg.png"% (outpath,len(sellags)),dpi=200,bbox_inches='tight')
-
 
 #%% Quickly load MLDs
 
@@ -464,7 +486,7 @@ cb = fig.colorbar(cf,ax=axs.flatten(),fraction=0.045)
 cb.set_label("$\lambda_a$ ($Wm^{-2}C^{-1}$)")
 plt.savefig("%sSeasonal_Damping_CESM-SLAB.png"%outpath,dpi=150,bbox_inches='tight')
 
-#%%
+#%% 
 
 clvls = np.arange(-60,65,5)
 mldctr = np.arange(0,1200,200)
