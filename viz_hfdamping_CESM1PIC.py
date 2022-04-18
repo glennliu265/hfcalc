@@ -33,7 +33,7 @@ import calendar as cal
 import scm
 import time
 import cmocean
-
+import copy
 
 
 #%% Data Paths
@@ -41,7 +41,7 @@ import cmocean
 datpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
 lipath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
 llpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
-figpath  = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220303/'
+figpath  = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220415/'
 proc.makedir(figpath)
 
 mconfigs =["PIC-SLAB","PIC-FULL"]
@@ -125,7 +125,7 @@ for i,dof in enumerate(dofs):
     # malls.append(malls)
 #%% Function (modified from .ipynb)
 
-def plot_hfdamping(plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None):
+def plot_hfdamping(plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None,select_id=True):
     
     # damping : [mon x lag x lat x lon]
     # msk     : [mon x lag x lat x lon]
@@ -137,8 +137,12 @@ def plot_hfdamping(plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None):
         ax = plt.gca()
     
     # Select what to plot
-    plotvar = damping[plotmon,plotlag,:,:]
-    plotmsk = msk[plotmon,plotlag,:,:]
+    if select_id:
+        plotvar = damping[plotmon,plotlag,:,:]
+        plotmsk = msk[plotmon,plotlag,:,:]
+    else:
+        plotvar = damping
+        plotmsk = msk
     
     # Flip Longitude
     lon1,plotvar1 = proc.lon360to180(lon,plotvar.T)
@@ -192,7 +196,6 @@ fig.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.036,pad=.05)
 ax.set_title("%s (%s) \n %s; Lag %i " % (masktype_fancy[imsk],mconfigs[plotmcf],mons3[plotmon],lags[plotlag]))
 
 #%% Seasonal Plot of Correlation
-
 plotlag  = 1
 plotmcf  = 0
 imsk     = 0
@@ -291,14 +294,121 @@ plt.suptitle(titlestr,fontsize=16)
 plt.savefig("%sDamping_%s.png"%(figpath,outstr),dpi=150)
 #ax = viz.label_sp(0,ax=ax,labelstyle="%s"%mons3[im],alpha=0.75,usenumber=True)
 
-#%% Check Conditions at 1 point
 
-lonf      = -29+360
-latf      = 16
+#%% Plot comparison of HFF with each lag (Ann Avg)
+
+
+plotlag  = 1
+plotmcf  = 1
+plotmsk  = 2
+im       = 0
+avgflag  = 'avg' # Can also use 'avg','max','min'
+keep_sign = False
+
+outstr   = "lagdiff_%s_MASK%s" % (mconfigs[plotmcf],masktype[plotmsk])
+titlestr = "Heat Flux Damping (%s ,Lag: %i, Mask=%s)" % (mconfigs[plotmcf],lags[plotlag],masktype[plotmsk])
+
+
+tautitles = (r"$\tau_{1}$",r"$\tau_{2}$ - $\tau_{1}$",r"$\tau_{3}$ - $\tau_{1}$")
+
+cints    = np.arange(-50,55,5)
+cintdiff = np.arange(-10,11,1)
+
+loopmon = np.concatenate([[11,],np.arange(0,11,1)])
+
+fig,axs = plt.subplots(1,3,figsize=(16,6),facecolor='white',constrained_layout=True,
+                    subplot_kw={'projection':ccrs.PlateCarree(central_longitude=0)})
+
+
+for i in range(3):
+    
+    ax     = axs.flatten()[i]
+    blabel = [0,0,0,1]
+    if i == 0:
+        blabel[0] = 1    
+    ax     = viz.add_coast_grid(ax,bboxplot,blabels=blabel,fill_color="gray")
+    ax.set_title(tautitles[i])
+    
+    if avgflag:
+        im = np.arange(0,12,1)
+    # if not isinstance(im,int):
+    #     avgflag = copy.deepcopy(im) # Copy Operation
+    #     im      = np.arange(0,12,1)
+    # else:
+    #     avgflag = False
+        
+
+    if i == 0:
+        plothf = dampings[plotmcf][im,0,:,:] # [mon x lag x lat x lon]
+        msk    = rmasks[im,0,:,:,plotmcf,plotmsk]
+        cint_in = cints
+    elif i == 1:
+        plothf = dampings[plotmcf][im,1,:,:] - dampings[plotmcf][im,0,:,:]
+        msk    = rmasks[im,0,:,:,plotmcf,plotmsk] * rmasks[im,1,:,:,plotmcf,plotmsk]
+        cint_in = cintdiff
+    elif i == 2:
+        plothf = dampings[plotmcf][im,2,:,:] - dampings[plotmcf][im,0,:,:]
+        msk    = rmasks[im,0,:,:,plotmcf,plotmsk] * rmasks[im,2,:,:,plotmcf,plotmsk]
+        cint_in = cintdiff
+        
+    if avgflag:
+        if avgflag == "avg":
+            plothf = plothf.mean(0)
+        elif avgflag == "max":
+            plothf  = proc.maxabs(plothf,axis=0,keep_sign=keep_sign)
+        elif avgflag == "min":
+            plothf  = proc.minabs(plothf,axis=0,keep_sign=keep_sign)
+        msk = msk.prod(0)
+            
+    ax,pcm = plot_hfdamping(plotlag,im,lon,lat,plothf*-1*limask,msk*limask,ax=ax,cints=cint_in,select_id=False)
+    
+    if i == 0:
+        cb = fig.colorbar(pcm,ax=axs[0],orientation='horizontal',fraction=0.045)
+    elif i == 2:
+        cb = fig.colorbar(pcm,ax=axs[1:].flatten(),orientation='horizontal',fraction=0.045)
+
+if avgflag:
+    savename= r"%s Heat Flux Differences ($Wm^{-2}\degree C^{-1}$)" % (avgflag.upper())
+else:    
+    savename= r"%s Heat Flux Differences ($Wm^{-2}\degree C^{-1}$)" % (mons3[im])
+plt.suptitle(savename,y=.85,fontsize=14)
+plt.savefig("%sDamping_Differences_%s.png"%(figpath,outstr),dpi=150,bbox_inches='tight')
+
+# for i in tqdm(range(12)):
+    
+#     ax     = axs.flatten()[i]
+#     im     = loopmon[i]
+    
+#     blabel = [0,0,0,0]
+#     if i%3 == 0:
+#         blabel[0] = 1
+#     if i>8:
+#         blabel[-1] = 1
+    
+#     ax     = viz.add_coast_grid(ax,bboxplot,blabels=blabel)
+#     ax.set_title(mons3[im])
+    
+    
+#     msk    = rmasks[:,:,:,:,plotmcf,plotmsk]
+#     ax,pcm = plot_hfdamping(plotlag,im,lon,lat,dampings[plotmcf],msk,ax=ax,cints=cints)
+    
+
+# cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.025)
+# cb.set_label("Heat Flux Damping ($W m^{-2} K^{-1}$)")
+# plt.suptitle(titlestr,fontsize=16)
+#plt.savefig("%sDamping_%s.png"%(figpath,outstr),dpi=150)
+# #ax = viz.label_sp(0,ax=ax,labelstyle="%s"%mons3[im],alpha=0.75,usenumber=True)
+
+# ------------------------------
+#%% Check Conditions at 1 point
+# ------------------------------
+lonf      = -30+360
+latf      = 50
 klon,klat = proc.find_latlon(lonf,latf,lon,lat)
 flip      = -1
 locstring  = "Lon %.2f ; Lat %.2f" % (lon[klon]-360,lat[klat])
 locfstring = "Lon_%i_Lat%i" % (lon[klon]-360,lat[klat])
+plotmean    = True
 
 # Plot heat flux feedback
 fig,axs = plt.subplots(2,1,figsize=(8,8),sharey=True)
@@ -308,7 +418,8 @@ for imcf in range(2):
     dampingpts.append(dampings[imcf][:,:,klat,klon])
     for ilag in range(3):
         ax.plot(mons3,dampingpts[imcf][:,ilag]*-1,label="Lag %i"% (ilag+1),lw=2.5)
-    ax.plot(mons3,dampingpts[imcf].mean(-1)*-1,label="Lag Avg.",color='k',lw=3)
+    if plotmean:
+        ax.plot(mons3,dampingpts[imcf].mean(-1)*-1,label="Lag Avg.",color='k',lw=1,ls='dashed')
     #ax.axhline(rhocrits[imcf],ls='dotted',color='gray')
     
     ax.set_title(mconfigs[imcf])
@@ -318,7 +429,7 @@ for imcf in range(2):
     ax.set_ylabel("Heat Flux Damping ($Wm^{-2}K^{-1}$)")
     
 plt.suptitle("Heat Flux Feedback Estimates @ %s" % (locstring),y=0.95,fontsize=16)
-plt.savefig("%sDamping_LagAvg_%s.png"%(figpath,locfstring),dpi=100)
+plt.savefig("%sDamping_LagAvg_%s_plotmean%i.png"%(figpath,locfstring,plotmean),dpi=100)
 
 
 #%% Plot the correlation
@@ -341,6 +452,8 @@ for v in range(2):
         
     plt.suptitle("Correlation for HFF Estimation @ %s" % (locstring),y=0.95,fontsize=16)
     plt.savefig("%sCorrelationg_LagAvg_%s.png"%(figpath,locfstring),dpi=100)
+    
+
 
 
 
