@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-
 Visualize Heat Flux Feedback for CESM1 Preindustrial Control,
 Slab and Full Simulations
 
@@ -34,8 +33,6 @@ import scm
 import time
 import cmocean
 import copy
-
-
 #%% Data Paths
 
 datpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
@@ -88,7 +85,7 @@ for i,mcf in enumerate(mconfigs):
     rflxs.append(c) #Flux must be positive into atm
 
 #%% Calculate critical threshold
-p        = 0.20 #0.05
+p        = 0.05 #0.05
 tails    = 2
 rhocrits = []
 
@@ -399,6 +396,148 @@ plt.savefig("%sDamping_Differences_%s.png"%(figpath,outstr),dpi=150,bbox_inches=
 #plt.savefig("%sDamping_%s.png"%(figpath,outstr),dpi=150)
 # #ax = viz.label_sp(0,ax=ax,labelstyle="%s"%mons3[im],alpha=0.75,usenumber=True)
 
+#%% Calculate seasonal averages
+
+
+
+sids = ([11,0,1],[2,3,4],[5,6,7],[8,9,10])
+
+
+ilag  = 0
+savgs = []
+smasks_mcf = []
+for imcf in range(2):
+    
+    # Compute seasonal averages
+    savg,monstrs=proc.calc_savg(dampings[imcf][:,ilag,:,:],return_str=True,axis=0)
+    savgs.append(savg)
+    
+    smasks_m = []
+    # Compute seasonally average masks by model
+    for s in range(4):
+        sid = sids[s]
+        smask = np.prod(rmasks[sid,ilag,...,imcf,2],(0)) #[mon x lat x lon x mconfig]
+        smasks_m.append(smask)
+    smasks_mcf.append(smasks_m)
+    
+    
+    
+
+
+smasks = []
+for s in range(4):
+    sid = sids[s]
+    
+    # Make seasonal masks, where rmasks = [mon x lag x lat x lon x mconfig x masktype]
+    # Multiple along month and mconfig option
+    smask = np.prod(rmasks[sid,ilag,...,2],(0,-1)) #[mon x lat x lon x mconfig]
+    smasks.append(smask)
+
+# ------------------------
+#%% Plot Seasonal Averages
+# ------------------------
+
+# Stochastic model Draft 5.0 Figure (Copied from viz_inputs_point.py)
+
+notitle   = True
+plot_mask = True
+
+
+proj = ccrs.PlateCarree(central_longitude=0)
+fig,axs = plt.subplots(2,2,figsize=(9,7.5),constrained_layout=True,
+                      subplot_kw={'projection':proj})
+
+sp_id       = 0
+bboxplot    = [-80,0,5,60]
+cints       = np.arange(-24,26,2)
+snamesl     = ('Winter (DJF)','Spring (MAM)','Summer (JJA)','Fall (SON)')
+
+for s,ax in enumerate(axs.flatten()):
+    
+    
+    blabel = [0,0,0,0]
+    if s%2 == 0:
+        blabel[0] = 1
+    if s>1:
+        blabel[-1]=1    
+    
+    plotvar = (savgs[1][s]-savgs[0][s]) * -1 * limask
+    
+    print(s)
+    pcm = ax.contourf(lon,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
+    #cl  = ax.contour(lon,lat,plotvar,levels=cints,colors='k',linewidths=0.5)
+    #ax.clabel(cl,cints[::2],fontsize=8)
+    
+    if plot_mask:
+        viz.plot_mask(lon,lat,(smasks[s]*limask).T,reverse=False,ax=ax,markersize=1,color='gray')
+        
+    ax = viz.add_coast_grid(ax=ax,bbox=bboxplot,fill_color='gray',blabels=blabel,proj=proj)
+    ax.set_title(snamesl[s],fontweight='bold')
+    #fig.colorbar(pcm,ax=ax)
+    ax = viz.label_sp(sp_id,ax=ax,fontsize=14,fig=fig,labelstyle="(%s)",case='lower',alpha=.75)
+    sp_id += 1
+    
+cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.030,pad=0.02)
+cb.set_label("Atmospheric Heat Flux Feedback ($Wm^{-2}K^{-1}$)")
+if notitle is False:
+    plt.suptitle("Seasonal Mean Mixed Layer Depth Differences in meters \n (CESM1 - WOA 1994)",fontsize=14,y=.94)
+plt.savefig("%sHFLX_Differences_FULL-SLAB_Savg.png" %(figpath),dpi=150,bbox_inches='tight')
+
+
+# -----------------------------------------------------------
+#%% Plot HFF (SLAB vs FULL), seasonal averages, over a REGION
+# -----------------------------------------------------------
+
+# Copied from viz_inputs_point.py
+
+viz_bbox  = [-80,-10,0,25] # Tropics
+plot_mask = True
+
+snamesl = ('Winter (DJF)','Spring (MAM)','Summer (JJA)','Fall (SON)')
+fig,axs = plt.subplots(2,4,figsize=(18,6),constrained_layout=True,
+                      subplot_kw={'projection':ccrs.PlateCarree(central_longitude=0)})
+
+sp_id = 0
+for imodel in range(2):
+    for s in range(4):
+        
+        ax = axs[imodel,s]
+        blabel = [0,0,0,0]
+        if s == 0:
+            blabel[0] = 1
+            
+        if imodel==1:
+            blabel[-1]=1    
+        
+        
+        plotvar = savgs[imodel][s] * -1 * limask
+        print(s)
+        pcm = ax.contourf(lon,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
+        cl  = ax.contour(lon,lat,plotvar,levels=cints,colors='k',linewidths=0.5)
+        ax.clabel(cl,cints[::2],fontsize=8)
+        
+        
+        if plot_mask:
+            viz.plot_mask(lon,lat,(smasks_mcf[imodel][s]*limask).T,reverse=False,ax=ax,markersize=1,color='gray')
+        ax = viz.add_coast_grid(ax=ax,bbox=viz_bbox,fill_color='gray',blabels=blabel)
+        if imodel == 0:
+            ax.set_title(snamesl[s],fontweight='bold')
+        
+        # Label Subplot
+        ax = viz.label_sp(sp_id,ax=ax,fontsize=14,fig=fig,labelstyle="(%s)",case='lower',alpha=.75)
+        sp_id += 1
+        
+        # Add Extra Label
+        if s ==0:
+            txt = viz.add_ylabel(mconfigs[imodel],ax=ax,x=-0.15,y=0.5)
+        
+
+cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.030,pad=0.02)
+cb.set_label("Atmospheric Heat Flux Feedback ($Wm^{-2}K^{-1}$)")
+
+# if notitle is False:
+#     plt.suptitle("Seasonal Mean Mixed Layer Depth Differences in meters \n (CESM1 - WOA 1994)",fontsize=14,y=.94)
+plt.savefig("%sHFLX_values_FULL-SLAB_Savg_regional.png" %(figpath),dpi=150,bbox_inches='tight')
 # ------------------------------
 #%% Check Conditions at 1 point
 # ------------------------------
