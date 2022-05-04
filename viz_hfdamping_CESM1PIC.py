@@ -7,6 +7,7 @@ Slab and Full Simulations
 Adapted/Copied from 
 - calc_HF_func.py
 - viz_hfdamping_CESM1LE.ipynb
+    
 
 Created on Tue Feb 22 16:11:42 2022
 @author: gliu
@@ -33,6 +34,7 @@ import scm
 import time
 import cmocean
 import copy
+
 #%% Data Paths
 
 datpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
@@ -44,9 +46,10 @@ proc.makedir(figpath)
 mconfigs =["PIC-SLAB","PIC-FULL"]
 dofs     =[898 - 1 - 2 - 2, 1898 - 1 - 2 - 2] 
 
-lags     = [1,2,3]
-bboxplot =  [-80,0,5,60]
+lags        = [1,2,3]
+bboxplot    =  [-80,0,5,60]
 mons3       = [viz.return_mon_label(m,nletters=3) for m in np.arange(1,13)]
+
 #%% Functions
 def load_dampraw(mconfig,datpath):
     inpaths = datpath+"CESM-"+mconfig+"-Damping/"
@@ -69,7 +72,6 @@ limask180    = np.load(lipath+"limask180_FULL-HTR.npy")
 dampings   = [] # [mon x lag x lat x lon360]
 rssts      = []
 rflxs      = []
-
 for i,mcf in enumerate(mconfigs):
 
     # Load Data
@@ -591,9 +593,3 @@ for v in range(2):
         
     plt.suptitle("Correlation for HFF Estimation @ %s" % (locstring),y=0.95,fontsize=16)
     plt.savefig("%sCorrelationg_LagAvg_%s.png"%(figpath,locfstring),dpi=100)
-    
-
-
-
-
-
