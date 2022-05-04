@@ -43,8 +43,8 @@ llpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_
 figpath  = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220415/'
 proc.makedir(figpath)
 
-mconfigs =["PIC-SLAB","PIC-FULL"]
-dofs     =[898 - 1 - 2 - 2, 1898 - 1 - 2 - 2] 
+mconfigs    = ["PIC-SLAB","PIC-FULL"]
+dofs        = [898 - 1 - 2 - 2, 1898 - 1 - 2 - 2] 
 
 lags        = [1,2,3]
 bboxplot    =  [-80,0,5,60]
@@ -572,7 +572,6 @@ for imcf in range(2):
 plt.suptitle("Heat Flux Feedback Estimates @ %s" % (locstring),y=0.95,fontsize=16)
 plt.savefig("%sDamping_LagAvg_%s_plotmean%i.png"%(figpath,locfstring,plotmean),dpi=100)
 
-
 #%% Plot the correlation
 fig,axs = plt.subplots(2,2,figsize=(16,8),sharex=True)
 rvars = [rssts,rflxs]
@@ -593,3 +592,4 @@ for v in range(2):
         
     plt.suptitle("Correlation for HFF Estimation @ %s" % (locstring),y=0.95,fontsize=16)
     plt.savefig("%sCorrelationg_LagAvg_%s.png"%(figpath,locfstring),dpi=100)
+

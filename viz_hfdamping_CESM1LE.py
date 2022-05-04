@@ -392,6 +392,8 @@ maskbot[idmin2max[:topN]] = 1
 masktop = (masktop.reshape(nens,nmon)).T
 maskbot = (maskbot.reshape(nens,nmon)).T
 
+
+
 #%% Plot differences, with identified events
 
 fig,ax = plt.subplots(1,1,figsize=(12,4))
@@ -402,12 +404,8 @@ ax.set_aspect('equal')
 ax.grid(True,ls='dotted')
 cb = fig.colorbar(pcm,ax=ax,fraction=0.025,pad=0.01,orientation='vertical')
 
-
-
 viz.plot_mask(ens,np.arange(1,13,1),masktop.T,reverse=True,ax=ax,markersize=10,color='yellow',marker="+")
 viz.plot_mask(ens,np.arange(1,13,1),maskbot.T,reverse=True,ax=ax,markersize=10,color='yellow',marker="x")
-
-
 
 ax.set_xticks(ens)
 
@@ -467,4 +465,326 @@ for i,e in enumerate([invars_max,invars_min]):
 plt.savefig("%sNHFLX_Damping_Correlation_CESM1LE_Composites_top%i.png" % (figpath,topN)
             ,dpi=200,bbox_inches='tight',transparent=False)
     
+
+#%% Load and make comparisons with calculated timescale
+
+
+# Load Data
+ncname = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/HTR-FULL_SST_autocorrelation_thres0.nc"
+ds     = xr.open_dataset(ncname)
+dssum  = ds.isel(thres=2).sum('lag')
+lons = dssum.lon.values
+lats = dssum.lat.values
+sstac   = dssum.SST.values # [ens x mon x lats x lons]
+
+# Cut damping variables to the region
+bboxreg = [lons[0],lons[-1],lats[0],lats[-1]]
+
+# Reshape damping (also flip longitude, and cut region)
+nens,nlag,nmon,nlat,nlon = damping.shape
+damping_rs      = damping.reshape(np.array(damping.shape[:-2]).prod(),nlat,nlon) # Combine dims
+damping_rs      = damping_rs.transpose(2,1,0) # Flip to [lon x lat x otherdim]
+
+lon1,damping_rs180 = proc.lon360to180(lon,damping_rs) # Flip longitude
+dampingr,lonr,latr, = proc.sel_region(damping_rs180,lon1,lat,bboxreg) # Cut Region
+
+dampingr        = dampingr.transpose(2,1,0) # Flip to [otherdim x lat x lon]
+dampingr        = dampingr.reshape(damping.shape[:-2]+(len(latr),len(lonr))) # Uncombine dims
+
+
+
+# Now compute the pattern correlation
+dampingr_in = dampingr[:,0,:,:,:] # Select first lag # [ens x mon x lat x lon]
+patcorr_t2 = np.zeros((nens,nmon)) * np.nan
+for e in tqdm(range(nens)):
+    for m in range(12):
+        patcorr_t2[e,m] = proc.patterncorr(dampingr_in[e,m,:,:],sstac[e,m,:,:])
+        
+        
+#%% Visualize pcolor of pattern correlation for each month
+
+fig,ax = plt.subplots(1,1,figsize=(12,4))
+
+pcm = ax.pcolormesh(ens,np.arange(1,13,1),patcorr_t2.T,shading='nearest',
+                    vmin=-.8,vmax=.8,cmap='cmo.balance')
+ax.set_aspect('equal')
+ax.grid(True,ls='dotted')
+cb = fig.colorbar(pcm,ax=ax,fraction=0.025,pad=0.01,orientation='vertical')
+
+ax.set_xticks(ens)
+
+ax.set_yticks(np.arange(1,13,1))
+ax.set_yticklabels(months)
+
+ax.set_xlabel("Ensemble")
+ax.set_ylabel("Month (HFF) or Reference Month for Lag ($T_2$)")
+ax.set_title("Pattern Correlation (Heat Flux Feedback and SST $T_2$ Timescale)",y=1.01)
+plt.savefig("%sPattern_Corr_T2_HFF_lag%i.png" % (figpath,1),dpi=200,bbox_inches='tight',transparent=False)
+
+
+#%% Make some scatterplots
+
+# Overall scatterplot (Ok, it's not making much sense....)
+nens,nmon,nlatr,nlonr=sstac.shape
+
+fig,ax = plt.subplots(1,1)
+sc = ax.scatter(dampingr_in.flatten(),sstac.flatten(),
+                alpha=0.3)
+ax.set_ylim([0,25])
+ax.set_xlim([-50,50])
+
+# -----------------------------------------------------------------------------
+#%% Observe behavior over specific regions
+
+# From SM Stylesheet
+bbox_SP     = [-60,-15,40,65]
+bbox_ST     = [-80,-10,20,40]
+bbox_TR     = [-75,-15,10,20]
+bbox_NA     = [-80,0 ,0,65]
+bbox_NA_new = [-80,0,10,65]
+bbox_ST_w   = [-80,-40,20,40]
+bbox_ST_e   = [-40,-10,20,40]
+regions     = ("SPG","STG","TRO","NAT","NNAT","STGe","STGw")        # Region Names
+bboxes      = (bbox_SP,bbox_ST,bbox_TR,bbox_NA,bbox_NA_new,bbox_ST_e,bbox_ST_w) # Bounding Boxes
+
+bbcol       = ["Blue","purple","Yellow","Black","Black","magenta","red"] # >> Need to Update
+
+# Preallocate
+nreg    = len(bboxes)
+t2_reg  = np.zeros((nens,nmon,nreg))
+hff_reg = t2_reg.copy()
+
+# Reshape to lon x lat x otherdims
+dampin = dampingr_in.reshape(nens*12,nlatr,nlonr).transpose(2,1,0)
+t2in   = sstac.reshape(nens*12,nlatr,nlonr).transpose(2,1,0)
+
+
+dampreg = []
+t2reg   = []
+
+for b,bbox in tqdm(enumerate(bboxes)):
+    
+    # Save regional average
+    dampavg = proc.sel_region(dampin,lonr,latr,bbox,reg_avg=1,awgt=1)
+    hff_reg[:,:,b] = dampavg.reshape(nens,12)
+    
+    # Save the regional values
+    rdamp,_,_ = proc.sel_region(dampin,lonr,latr,bbox)
+    dampreg.append(rdamp.reshape(rdamp.shape[:2]+(nens,12)))
+    
+    # Save avg (T2)
+    t2avg = proc.sel_region(t2in,lonr,latr,bbox,reg_avg=1,awgt=1)
+    t2_reg[:,:,b] = t2avg.reshape(nens,12)
+    
+    # Save values (T2)
+    rt2,_,_ = proc.sel_region(t2in,lonr,latr,bbox)
+    t2reg.append(rt2.reshape(rt2.shape[:2]+(nens,12)))
+    
+    
+#%% Repeat pattern correlation for each region
+
+patcorr_t2_reg = np.zeros((nens,nmon,nreg)) * np.nan # [ens x month x region]
+for r in tqdm(range(nreg)):
+    for e in range(nens):
+        for m in range(12):
+            dmp = dampreg[r][:,:,e,m]
+            t2  = t2reg[r][:,:,e,m]
+
+            patcorr_t2_reg[e,m,r] = proc.patterncorr(dmp,t2)
+        
+#%% Pcolor plot for each region (Ensemble vs. Reference Month)
+
+for r in range(nreg):
+    
+    fig,ax = plt.subplots(1,1,figsize=(12,4))
+    
+    pcm = ax.pcolormesh(ens,np.arange(1,13,1),patcorr_t2_reg[:,:,r].T,shading='nearest',
+                        vmin=-.8,vmax=.8,cmap='cmo.balance')
+    
+    ax.set_aspect('equal')
+    ax.grid(True,ls='dotted')
+    cb = fig.colorbar(pcm,ax=ax,fraction=0.025,pad=0.01,orientation='vertical')
+
+    ax.set_xticks(ens)
+    ax.set_yticks(np.arange(1,13,1))
+    ax.set_yticklabels(months)
+
+    ax.set_xlabel("Ensemble")
+    ax.set_ylabel("Month (HFF) or Reference Month for Lag ($T_2$)")
+    ax.set_title("%s Pattern Correlation (Heat Flux Feedback and SST $T_2$ Timescale)" % (regions[r]),y=1.01)
+    plt.savefig("%sPattern_Corr_T2_HFF_lag%i_region%s.png" % (figpath,1,regions[r]),dpi=200,bbox_inches='tight',transparent=False)
+
+
+#%% Calculate topN composites for each region
+
+topN      = 5
+rid_sel   = [0,2,4,5,6]
+
+invar_raw = [dampingr_in,sstac] # (42, 12, 69, 65)
+invars    = [v.reshape(nens*nmon,nlatr,nlonr) for v in invar_raw] # Flatten indices : (nens*nmon x lat x lon)
+
+t2_composites = np.zeros((nlatr,nlonr,nreg,2)) *np.nan # [lat x lon x region x type (0=min,1=max)]
+hf_composites = t2_composites.copy()
+pcolmarkers  = np.zeros((nmon,nens,nreg,2)) * np.nan
+
+for r in tqdm(range(nreg)):
+    
+    # Get patcorr for region and flatten
+    patcorr_in        = patcorr_t2_reg[...,r]
+    patcorr_diff_flat = (patcorr_in).reshape(nens*nmon) 
+    
+    # Get sorting indices (smallest to largest)
+    idmin2max = np.argsort(patcorr_diff_flat,axis=0)
+    
+    # Make composites
+    invars_max = [v[idmin2max[-topN:],:,:].mean(0) for v in invars]
+    invars_min = [v[idmin2max[:topN],:,:].mean(0) for v in invars]
+    
+    # Read out to array
+    t2_composites[:,:,r,0] = invars_min[1].copy()
+    t2_composites[:,:,r,1] = invars_max[1].copy()
+    hf_composites[:,:,r,0] = invars_min[0].copy()
+    hf_composites[:,:,r,1] = invars_max[0].copy()
+    
+    # get makers for topN
+    masktop = np.zeros((nens*nmon))
+    maskbot = np.zeros((nens*nmon))
+    masktop[idmin2max[-topN:]] = 1
+    maskbot[idmin2max[:topN]] = 1
+    masktop = (masktop.reshape(nens,nmon)).T
+    maskbot = (maskbot.reshape(nens,nmon)).T
+    
+    pcolmarkers[:,:,r,0] = maskbot.copy()
+    pcolmarkers[:,:,r,1] = masktop.copy()
+
+
+#%% Plot Composites for each region
+
+r = 4
+
+vnames_in = ("Heat Flux Feedback ($\lambda_a$: $Wm^{-2}\degree C^{-1}$)","$T_2$ (Months)")
+cints_all = (np.arange(-45,47.5,2.5),np.arange(0,16.5,0.5))
+cmaps_all = ('cmo.balance','inferno')
+
+for r in range(nreg):
+    fig = plt.figure(constrained_layout=False, facecolor='w',figsize=(12,14))
+    
+    gs = fig.add_gridspec(nrows=3, ncols=6, left=.02, right=1,
+                          hspace=.2, wspace=0.15)
+    
+    # Plot Pattern Correlation Grid
+    ax0 = fig.add_subplot(gs[0, :])
+    ax  = ax0
+    ax.set_aspect('equal')
+    ax.set_xticks(ens)
+    ax.set_yticks(np.arange(1,13,1))
+    ax.set_yticklabels(months)
+    ax.set_xlabel("Ensemble")
+    ax.set_ylabel("Reference Month")
+    ax.grid(True,ls='dotted')
+    pcm = ax.pcolormesh(ens,np.arange(1,13,1),patcorr_t2_reg[...,r].T,shading='nearest',
+                        vmin=-.8,vmax=.8,cmap='cmo.balance')
+    cb = fig.colorbar(pcm,ax=ax,fraction=0.025,pad=0.01,orientation='vertical')
+    ax.set_title("%s Pattern Correlation (Heat Flux Feedback and $T_2$)"%(regions[r]),
+                 fontweight='bold',fontsize=16,)
+    
+    viz.plot_mask(ens,np.arange(1,13,1),pcolmarkers[:,:,r,1].T,reverse=True,ax=ax,markersize=10,color='yellow',marker="+")
+    viz.plot_mask(ens,np.arange(1,13,1),pcolmarkers[:,:,r,0].T,reverse=True,ax=ax,markersize=10,color='yellow',marker="x")
+
+    
+    # Plot Each Pattern
+    ax1 = fig.add_subplot(gs[1, :3],projection=ccrs.PlateCarree())
+    ax2 = fig.add_subplot(gs[1, 3:],projection=ccrs.PlateCarree())
+    
+    ax3 = fig.add_subplot(gs[2, :3],projection=ccrs.PlateCarree())
+    ax4 = fig.add_subplot(gs[2, 3:],projection=ccrs.PlateCarree())
+    
+    plotvars = [hf_composites,t2_composites]
+    
+    for j in range(2):
+        
+        if j == 0:
+            axin  = [ax1,ax2]
+            axislab = "Top %i \n Composite" % topN
+            
+        else:
+            axin = [ax3,ax4]
+            axislab = "Bottom %i \n Composite" % topN
+            
+        for a,ax in enumerate(axin):
+            
+            blabel = [0,0,0,1]
+            if a ==0:
+                blabel[0] = 1
+                ax.text(-0.26, 0.5, axislab, va='bottom', ha='center',
+                    rotation='horizontal', rotation_mode='anchor',
+                    transform=ax.transAxes,fontsize=14)
+            ax  = viz.add_coast_grid(ax,bbox=bboxplot,blabels=blabel,fill_color='gray')
+            
+            plotvar = plotvars[a][:,:,r,j] # [variable][region and max/min]
+            cint_in = cints_all[a]
+            
+            cf = ax.contourf(lonr,latr,plotvar,
+                             cmap=cmaps_all[a],levels=cint_in,extend='both',zorder=-1)
+            
+            if j == 0:
+                ax.set_title(vnames_in[a])
+            if j == 1:
+                cb = fig.colorbar(cf,ax=ax,orientation='vertical',fraction=0.045)
+                
+    plt.savefig("%sPattern_Corr_T2_HFF_Composites_lag%i_region%s_topN%i.png" % (figpath,1,regions[r],topN),dpi=200,bbox_inches='tight',transparent=False)
+    
+
+
+#%% Plot Relationship in each region for all months and fluxes
+
+fig,ax = plt.subplots(1,1)
+
+scs = []
+for b in [0,1,2,4,5,6]:
+    
+    sc = ax.scatter(hff_reg[:,:,b].flatten(),t2_reg[:,:,b].flatten(),c=bbcol[b],alpha=0.4,label=regions[b])
+    scs.append(sc)
+
+ax.legend()
+ax.set_ylim([0,25])
+ax.set_xlim([-10,50])
+
+ax.set_xlabel("Heat Flux Feedback ($Wm^{-1}\degree C^{-1}$)")
+ax.set_ylabel("$T_2$ (Months)")
+    
+#%% On separate subplots
+
+
+#fig,axs = viz.init_2rowodd(3,proj=None,figsize=(12,8))
+
+fig,axs = plt.subplots(2,3,figsize=(10,6),constrained_layout=True)
+
+for i,b in enumerate([0,1,2,4,5,6]):
+    
+    #ax = axs[i]
+    ax = axs.flatten()[i]
+    
+    ax.scatter(hff_reg[:,:,b].flatten(),t2_reg[:,:,b].flatten(),c=bbcol[b],alpha=0.6,label=regions[b],marker="x")
+    
+    ax.set_ylim([0,12])
+    ax.set_xlim([-10,50])
+    
+    if i > 2:
+        ax.set_xlabel("Heat Flux Feedback ($Wm^{-1}\degree C^{-1}$)")
+    if i in [0,3]:
+        ax.set_ylabel("$T_2$ (Months)")
+    
+    ax.set_title(regions[b])
+    ax.grid(True,ls="dotted")
+plt.savefig("%sRegionally_avged_hff_T2_relationship.png" % (figpath),dpi=150,bbox_inches='tight')
+
+    
+
+#%%
+
+
+
+
+
 
