@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import time
 import sys
 
+import cartopy.crs as ccrs
+
 #%% Import modules
 stormtrack = 0
 
@@ -29,42 +31,79 @@ if stormtrack:
 else:
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/03_Scripts/stochmod/model/")
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
-from amv import proc
+from amv import proc,viz
 import scm
-#%% Other edits
+#%% User Settings
 
+
+# Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
 datpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
-#%%
-
-# Part 2: Preprocess of HFF Estimation ****************************************
-# Lets start by doing this just for ts and qnet
 
 
-# Other Options
-debug=False
 
-# Set names
-lonname = 'lon'
-latname = 'lat'
-tname   = 'time'
+# Part 1 (Preprocessing) ------------------------------------------
 
 # Select time crop
-tstart  = '1948-01-01'
-tend    = '2016-12-31'
+croptime = True
+tstart   = '1948-01-01'
+tend     = '2016-12-31'
 
 # Detrend Method
 detrend = 1
 
-# Open dataarray
+# Variables and Dataset Name
 vnames_in    = ['ts','qnet']
 dataset_name ='ncep_ncar'
+
+# Set coordinate names for dataset
+lonname = 'lon'
+latname = 'lat'
+tname   = 'time'
+
+# Part 2 (ENSO Index Calculation) ---------------------------------
+
+# ENSO Parameters
+pcrem    = 3                   # PCs to calculate
+bbox     = [120, 290, -20, 20] # ENSO Bounding Box
+
+# Part 3 (ENSO Removal) -------------------------------------------
+
+ensolag  = 1    # Lag between ENSO month and response month in NATL
+reduceyr = True # Drop years due to ENSO lag
+monwin   = 3    # Window of months to consider
+
+
+# Part 4 (HFF Calculations) -------------------------------------------
+ensorem = False
+
+# Toggles
+debug   = True # Print Figures, statements for debugging
+
+
+#%%
+
+# Part 1: Preprocess Variables (Anomalize, Detrend, Flip latitude if needed)
+
+"""
+
+IN  : ncfile, <dataset_name>_<vname>.nc 
+    Contains variable [time x lat x lon360] where li-mask has been applied.
+    Also contains lat,lon,time.
+
+OUT : ncfile, <dataset_name>_<vname>_manom_detrend#.nc
+    Save as above, but anomalized, detrended and latitude corrected.
+    
+ex: ncep_ncar_ts.nc  -->  ncep_ncar_ts_manom_detrend1.nc
+
+"""
 
 das = []
 for v in vnames_in:
     
     # Open the dataset, slice to time period of interest
     da = xr.open_dataset(datpath+"%s_%s.nc" % (dataset_name,v))
-    da = da.sel(time=slice(tstart,tend))
+    if croptime:
+        da = da.sel(time=slice(tstart,tend))
     das.append(da)
     
     # Read out the variables # [time x lat x lon]
@@ -87,7 +126,7 @@ for v in vnames_in:
         lat   = np.flip(lat)
         vanom = np.flip(vanom,axis=1)
     
-    # Detrend the variable (take from calc_amv_hadisst.py)
+    # Detrend the variable (taken from calc_amv_hadisst.py)
     # ----------------------------------------------------
     start= time.time()
     indata = vanom.reshape(nmon,nlat*nlon).T # Transpose to [Space x Time]
@@ -123,20 +162,25 @@ for v in vnames_in:
     da = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
 
     
-#%% Part 3, Compute ENSO Indices
-
-# ENSO Parameters
-pcrem   = 3 # PCs to calculate
-bbox    = [120, 290, -20, 20]
-detrend = 1 
-
-
+#%% Part 2, Compute ENSO Indices
 
 # ------------------- -------- General Portion --------------------------------
 """
-Looks for <dataset name>_ts_manom_detrend<N>.nc 
-containing ts anomalies [time lat lon] with land/ice masked out
+
+IN : ncfile, <dataset_name>_<vname>_manom_detrend#.nc
+    Anomalized, detrended ts with landice masked applied
+    
+OUT : npz file <dataset_name>_ENSO_detrend#_pcs#.npz
+    PC File containing:
+        eofall (ENSO EOF Patterns)          [lon x lat x month x pc]
+        pcall  (ENSO principle components)  [time x month x pc]
+        varexpall (ENSO variance explained) [month x pc]]
+        lon,lat,time,ensobbox variables
+
+ex: ncep_ncar_ts_manom_detrend1.nc --> ncep_ncar_ENSO_detrend1_pcs3.npz
+
 """
+
 st = time.time()
 
 # Open the dataset
@@ -183,14 +227,9 @@ np.savez(savename,**{
         )
 print("Data saved in %.2fs"%(time.time()-st))
 
-#%% Part 4: Calculate the ENSO Component, and remove it.
+#%% Part 3: Calculate the ENSO Component, and remove it.
 # (based on remove_ENSO_PIC.py)
 
-ensolag  = 1 # Lag between ENSO month and response month in NATL
-reduceyr = True # Drop years due to ENSO lag
-monwin   = 3
-
-v        = "ts"
 
 # ------------------- -------- General Portion --------------------------------
 """
@@ -205,7 +244,6 @@ allstart = time.time()
 savename = "%senso/%s_ENSO_detrend%i_pcs%i.npz" % (datpath,dataset_name,detrend,pcrem)
 ld = np.load(savename,allow_pickle=True)
 ensoid = ld['pcs'] # [year x  month x pc]
-
 
 for v in vnames_in:
     # Load Target variable
@@ -239,7 +277,7 @@ for v in vnames_in:
 
 #%% Compute the heat flux feedback
 
-ensorem = False
+
 
 # Load inputs with variables removed
 invars = []
