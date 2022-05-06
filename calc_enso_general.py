@@ -44,16 +44,19 @@ proc.makedir(figpath)
 # Part 1 (Preprocessing) ------------------------------------------
 
 # Select time crop
-croptime = False
+croptime = True
 tstart   = '1948-01-01'
 tend     = '2016-12-31'
 
 # Detrend Method
-detrend = 1
+detrend = 3
 
 # Variables and Dataset Name
 vnames_in    = ['ts','qnet']
-dataset_name = 'CESM1_FULL_PIC'#'ncep_ncar'
+dataset_name = 'ncep_ncar'#'era20c'
+
+#'CESM1_FULL_PIC'
+#'ncep_ncar'
 
 # Set coordinate names for dataset
 lonname = 'lon'
@@ -304,7 +307,7 @@ damping,autocorr,crosscorr = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=T
 # Save heat flux (from hfdamping_mat2nc.py)
 # ----------------------------------------
 outvars  = [damping,crosscorr,autocorr]
-savename = "%s%s_hfdamping_ensorem%i.nc" % (datpath,dataset_name,ensorem)
+savename = "%s%s_hfdamping_ensorem%i_detrend%i.nc" % (datpath,dataset_name,ensorem,detrend)
 dims     = {'month':np.arange(1,13,1),
               "lag"  :np.arange(1,4,1),
               "lat"  :lat,
@@ -383,7 +386,7 @@ if debug: # Plot seasonal cycle
     cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.035,pad=0.05)
     cb.set_label("$\lambda_a$ : $W m^{2} \lambda_a$ ($\degree C ^{-1}$)")
     plt.suptitle("Heat Flux Damping For %s \n Enso Removed: %s | Lag: %i" % (dataset_name,ensorem,il+1))
-    plt.savefig("%sNHFLX_damping_lag%i_%s.png" % (figpath,il+1,dataset_name,),dpi=150)
+    plt.savefig("%sNHFLX_damping_lag%i_%s_detrend%i.png" % (figpath,il+1,dataset_name,detrend),dpi=150)
 
 #%%
 

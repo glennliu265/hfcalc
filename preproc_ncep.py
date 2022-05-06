@@ -46,28 +46,56 @@ sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/
 from amv import proc
 #%%
 
-# Set up the file names and path
-vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
-vname_ncep = ("uswrf","ulwrf","dswrf","dlwrf","shtfl","lhtfl","skt")
-vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
 
-ncnames = ('uswrf.sfc/monthly/uswrf.sfc.mon.mean.nc',
-           'ulwrf.sfc/monthly/ulwrf.sfc.mon.mean.nc',
-           'dswrf.sfc/monthly/dswrf.sfc.mon.mean.nc',
-           'dlwrf.sfc/monthly/dlwrf.sfc.mon.mean.nc',
-           'shtfl.sfc/monthly/shtfl.sfc.mon.mean.nc',
-           'lhtfl.sfc/monthly/lhtfl.sfc.mon.mean.nc',
-           'skt.sfc/monthly/skt.sfc.mon.mean.nc'
-           )
+dataset_name = 'noaa_20cr_v2'
 
-# Get land and sea ice
-icename = "icec.sfc/monthly/icec.sfc.mon.mean.nc"
 
-# Mounted to volumes
-datpath = "/Volumes/data/reanalysis/ncep.reanalysis.i/surface_gauss/"
+
+if dataset_name == 'ncep_ncar':
+    # Set up the file names and path
+    vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
+    vname_ncep = ("uswrf","ulwrf","dswrf","dlwrf","shtfl","lhtfl","skt")
+    vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
+    
+    ncnames = ('uswrf.sfc/monthly/uswrf.sfc.mon.mean.nc',
+               'ulwrf.sfc/monthly/ulwrf.sfc.mon.mean.nc',
+               'dswrf.sfc/monthly/dswrf.sfc.mon.mean.nc',
+               'dlwrf.sfc/monthly/dlwrf.sfc.mon.mean.nc',
+               'shtfl.sfc/monthly/shtfl.sfc.mon.mean.nc',
+               'lhtfl.sfc/monthly/lhtfl.sfc.mon.mean.nc',
+               'skt.sfc/monthly/skt.sfc.mon.mean.nc'
+               )
+    
+    # Get land and sea ice
+    icename = "icec.sfc/monthly/icec.sfc.mon.mean.nc"
+    
+    # Mounted to volumes
+    datpath = "/Volumes/data/reanalysis/ncep.reanalysis.i/surface_gauss/"
+elif dataset_name == 'noaa_20cr_v2':
+    # Set up the file names and path
+    vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
+    vname_ncep = ("uswrf","ulwrf","dswrf","dlwrf","shtfl","lhtfl","air")
+    vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
+    
+    
+    ncnames = ('uswrf.sfc.mon.mean.nc',
+               'ulwrf.sfc.mon.mean.nc',
+               'dswrf.sfc.mon.mean.nc',
+               'dlwrf.sfc.mon.mean.nc',
+               'shtfl.sfc.mon.mean.nc',
+               'lhtfl.sfc.mon.mean.nc',
+               'air.sfc.mon.mean.nc'
+               )
+    
+    # Get land and sea ice
+    icename = "icec.mon.mean.nc"
+    
+    # downloaded from CMIP5 server
+    datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/raw/noaa_20cr_v2/"
+
 ncs     = [datpath+nc for nc in ncnames]
-
-
+    
+    
 outpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
 
 # Part 1: Applying the Land/Ice Mask ******************************************
@@ -97,7 +125,7 @@ limask = landmask*icemask
 plt.pcolormesh(ds_ice.lon,ds_ice.lat,limask),plt.colorbar()
 
 # Save landice mask
-savename = "%sncep_ncar_limask_icefrac%.2f.npy" % (outpath,icethres)
+savename = "%s%s_limask_icefrac%.2f.npy" % (outpath,dataset_name,icethres)
 #savename = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/ncep_ncar_limask360_fract.npy"
 np.save(savename,limask)
 #%% Lets examine/process surface shortwave...
@@ -110,7 +138,7 @@ dsd = xr.open_dataset(ncs[2]) # downward
 ds_fsns = (dsd.dswrf - dsu.uswrf) * limask[None,:,:]
 
 # Rename and save
-savenetcdf = "%sncep_ncar_fsns.nc" % outpath
+savenetcdf = "%s%s_fsns.nc" % (outpath,dataset_name)
 ds_fsns    = ds_fsns.rename('fsns')
 print(ds_fsns)
 ds_fsns.to_netcdf(savenetcdf,
@@ -131,7 +159,7 @@ dld = xr.open_dataset(ncs[3]) # downward
 ds_flns = (dld.dlwrf - dlu.ulwrf) * limask[None,:,:]
 
 # Rename and save
-savenetcdf = "%sncep_ncar_flns.nc" % outpath
+savenetcdf = "%s%s_flns.nc" % (outpath,dataset_name)
 ds_flns    = ds_flns.rename('flns')
 print(ds_flns)
 ds_flns.to_netcdf(savenetcdf,
@@ -154,7 +182,7 @@ for i in [4,5,6]:
         ds *= -1 # flip to downwards positive
     
     # Save netcdf
-    savenetcdf = "%sncep_ncar_%s.nc" % (outpath,vname_new[i])
+    savenetcdf = "%s%s_%s.nc" % (outpath,dataset_name,vname_new[i])
     dsn = ds[vname_ncep[i]].rename(vname_new[i])
     print(ds)
     dsn.to_netcdf(savenetcdf,
@@ -230,10 +258,10 @@ def compute_qnet(datpath,dataset_name,vnames=None,downwards_positive=True,
 
 # Load data from above, compute qnet
 vnames = ["fsns","flns","hfss","hfls"]
-ds_qnet = compute_qnet(outpath,'ncep_ncar',vnames=vnames)
+ds_qnet = compute_qnet(outpath,dataset_name,vnames=vnames)
 
 # Save output
-savenetcdf = "%sncep_ncar_%s.nc" % (outpath,"qnet")
+savenetcdf = "%s%s_%s.nc" % (outpath,dataset_name,"qnet")
 ds_qnet.to_netcdf(savenetcdf,
          encoding={"qnet": {'zlib': True}})
 print("Saving netCDF to %s"% (savenetcdf,))
