@@ -15,11 +15,6 @@ import numpy as np
 import glob
 import time
 
-import sys
-sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
-sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
-from amv import proc
-
 #%% User Edits
 
 # Paths

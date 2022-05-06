@@ -196,9 +196,6 @@ for m in range(12):
     print("Completed month %i in %.2fs"%(m+1,time.time()-st))
 
 # Replace data back with nan points
-    
-    
-
 # Save Output
 st = time.time()
 np.savez(outpath+outname,**{
