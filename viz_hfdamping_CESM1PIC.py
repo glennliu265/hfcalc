@@ -37,10 +37,10 @@ import copy
 
 #%% Data Paths
 
-datpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
-lipath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
-llpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
-figpath  = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220415/'
+datpath     = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
+lipath      = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
+llpath      = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
+figpath     = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220415/'
 proc.makedir(figpath)
 
 mconfigs    = ["PIC-SLAB","PIC-FULL"]
@@ -254,7 +254,7 @@ plt.savefig("%s%s_corr_%s.png"%(figpath,masktype[imsk],outstr),dpi=150)
 
 
 plotlag  = 1
-plotmcf  = 0
+plotmcf  = 1
 plotmsk  = 0
 
 outstr   = "lag%s_%s_MASK%s" % (lags[plotlag],mconfigs[plotmcf],masktype[plotmsk])
@@ -284,7 +284,7 @@ for i in tqdm(range(12)):
     
     
     msk    = rmasks[:,:,:,:,plotmcf,plotmsk]
-    ax,pcm = plot_hfdamping(plotlag,im,lon,lat,dampings[plotmcf],msk,ax=ax,cints=cints)
+    ax,pcm = plot_hfdamping(plotlag,im,lon,lat,dampings[plotmcf]*-1,msk,ax=ax,cints=cints)
     
 
 cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.025)
@@ -592,4 +592,54 @@ for v in range(2):
         
     plt.suptitle("Correlation for HFF Estimation @ %s" % (locstring),y=0.95,fontsize=16)
     plt.savefig("%sCorrelationg_LagAvg_%s.png"%(figpath,locfstring),dpi=100)
+
+#%% Compute old damping with new damping
+
+
+dampingold = dampings[1] # [mon lag lat lon]
+
+newpath    = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/CESM1_FULL_PIC_hfdamping_ensorem0.nc"
+dampingnew = xr.open_dataset(newpath).nhflx_damping.values 
+
+
+# Plot the differences
+cints   = np.arange(-10,10.5,0.5)
+loopmon = np.concatenate([[11,],np.arange(0,11,1)])
+fig,axs = plt.subplots(4,3,figsize=(16,16),facecolor='white',constrained_layout=True,
+                    subplot_kw={'projection':ccrs.PlateCarree(central_longitude=0)})
+
+
+for i in tqdm(range(12)):
+    
+    ax     = axs.flatten()[i]
+    im     = loopmon[i]
+    
+    blabel = [0,0,0,0]
+    if i%3 == 0:
+        blabel[0] = 1
+    if i>8:
+        blabel[-1] = 1
+    
+    ax     = viz.add_coast_grid(ax,bboxplot,blabels=blabel)
+    ax.set_title(mons3[im])
+    
+    
+    plotvar = dampingnew[im,0,:,:] - dampingold[im,0,:,:]
+    lon1,plotvar1 = proc.lon360to180(lon,plotvar.T[:,:,None])
+    pcm = ax.contourf(lon1,lat,plotvar1.squeeze().T,levels=cints,
+                      cmap='cmo.balance',extend='both')
+    
+    
+    
+    #msk    = rmasks[:,:,:,:,plotmcf,plotmsk]
+    #ax,pcm = plot_hfdamping(plotlag,im,lon,lat,dampings[plotmcf]*-1,msk,ax=ax,cints=cints)
+    
+
+cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.025)
+cb.set_label("Heat Flux Damping Differences ($W m^{-2} K^{-1}$)")
+plt.suptitle("New Damping - Old Damping",fontsize=16)
+plt.savefig("%sDamping_Differences_%s.png"%(figpath,outstr),dpi=150)
+
+
+
 
