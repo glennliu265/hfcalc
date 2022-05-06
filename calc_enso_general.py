@@ -19,7 +19,6 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import time
 import sys
-
 import cartopy.crs as ccrs
 
 #%% Import modules
@@ -38,13 +37,14 @@ import scm
 
 # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
 datpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
-
+figpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220511/"
+proc.makedir(figpath)
 
 
 # Part 1 (Preprocessing) ------------------------------------------
 
 # Select time crop
-croptime = True
+croptime = False
 tstart   = '1948-01-01'
 tend     = '2016-12-31'
 
@@ -53,7 +53,7 @@ detrend = 1
 
 # Variables and Dataset Name
 vnames_in    = ['ts','qnet']
-dataset_name ='ncep_ncar'
+dataset_name = 'CESM1_FULL_PIC'#'ncep_ncar'
 
 # Set coordinate names for dataset
 lonname = 'lon'
@@ -74,7 +74,7 @@ monwin   = 3    # Window of months to consider
 
 
 # Part 4 (HFF Calculations) -------------------------------------------
-ensorem = False
+ensorem = True
 
 # Toggles
 debug   = True # Print Figures, statements for debugging
@@ -150,7 +150,7 @@ for v in vnames_in:
             ax.plot(x,model[44,:],label='fit')
             ax.scatter(x,okdt[:,44],label='dt')
             ax.set_title("Visualize Detrending Method %i"% detrend)
-            okdt = okdt.T
+            #okdt = okdt.T
             
     data_dt = np.zeros((nmon,nlat*nlon)) * np.nan
     data_dt[:,okpts] = okdt
@@ -165,11 +165,12 @@ for v in vnames_in:
 #%% Part 2, Compute ENSO Indices
 
 # ------------------- -------- General Portion --------------------------------
+
 """
 
 IN : ncfile, <dataset_name>_<vname>_manom_detrend#.nc
     Anomalized, detrended ts with landice masked applied
-    
+
 OUT : npz file <dataset_name>_ENSO_detrend#_pcs#.npz
     PC File containing:
         eofall (ENSO EOF Patterns)          [lon x lat x month x pc]
@@ -192,7 +193,7 @@ da = da.sel(lon=slice(bbox[0],bbox[1]),lat=slice(bbox[2],bbox[3]))
 
 # Read out the variables # [time x lat x lon]
 st        = time.time()
-invar     = da[v].values
+invar     = da['ts'].values
 lon       = da[lonname].values
 lat       = da[latname].values
 times     = da[tname].values
@@ -277,8 +278,6 @@ for v in vnames_in:
 
 #%% Compute the heat flux feedback
 
-
-
 # Load inputs with variables removed
 invars = []
 for v in vnames_in:
@@ -288,6 +287,9 @@ for v in vnames_in:
     else:
         savename = "%s%s_%s_manom_detrend%i.nc" % (datpath,dataset_name,v,detrend)
     ds       = xr.open_dataset(savename)
+    
+    lat = ds.lat.values
+    lon = ds.lon.values
     
     loadvar = ds[v].values
     ntime,nlat,nlon = loadvar.shape
@@ -299,28 +301,70 @@ for v in vnames_in:
 sst,flx = invars
 damping,autocorr,crosscorr = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=True)
 
+# Save heat flux (from hfdamping_mat2nc.py)
+# ----------------------------------------
+outvars  = [damping,crosscorr,autocorr]
+savename = "%s%s_hfdamping_ensorem%i.nc" % (datpath,dataset_name,ensorem)
+dims     = {'month':np.arange(1,13,1),
+              "lag"  :np.arange(1,4,1),
+              "lat"  :lat,
+              "lon"  :lon}
+
+# Set some attributes
+varnames = ("nhflx_damping",
+            "sst_flx_crosscorr",
+            "sst_autocorr")
+varlnames = ("Net Heat Flux Damping",
+             "SST-Heat Flux Cross Correlation",
+             "SST Autocorrelation")
+units     = ("W/m2/degC",
+             "Correlation",
+             "Correlation")
 
 
+das = []
+for v,name in enumerate(varnames):
+    attr_dict = {'long_name':varlnames[v],
+                 'units':units[v]}
+    da = xr.DataArray(outvars[v],
+                dims=dims,
+                coords=dims,
+                name = name,
+                attrs=attr_dict
+                )
+    if v == 0:
+        ds = da.to_dataset() # Convert to dataset
+    else:
+        ds = ds.merge(da) # Merge other datasets
+        
+    # Append to list if I want to save separate dataarrays
+    das.append(ds)
 
-# Save heat flux
-#savename = "%s%s_hfdamping_ensorem%i.npz" % (datpath,dataset_name,ensorem)
-#coordsdict = 
+#% Save as netCDF
+# ---------------
+st = time.time()
+encoding_dict = {name : {'zlib': True} for name in varnames} 
+print("Saving as " + savename)
+ds.to_netcdf(savename,
+         encoding=encoding_dict)
+print("Saved in %.2fs" % (time.time()-st))
 
-
-# Save 
-if debug:
-    
-    im = 3
+#%% Save 
+if debug: # Plot seasonal cycle
     il = 0
-    
     proj = ccrs.PlateCarree()
     fig,axs = plt.subplots(4,3,subplot_kw={'projection':proj},
                            figsize=(12,12),constrained_layout=True)
     
+    
+    plotmon = np.roll(np.arange(0,12),1)
+    
     for im in range(12):
         
+        monid = plotmon[im]
+        
         ax = axs.flatten()[im]
-        plotvar = damping[im,il,:,:]
+        plotvar = damping[monid,il,:,:]
         lon1,plotvar1 = proc.lon360to180(lon,(plotvar.T)[...,None])
         
         blabel=[0,0,0,0]
@@ -329,21 +373,17 @@ if debug:
         if im>8:
             blabel[-1] = 1
         
-        ax = viz.add_coast_grid(ax,bbox=[-100,0,-10,65],fill_color='gray',
+        ax = viz.add_coast_grid(ax,bbox=[-80,0,-10,62],fill_color='gray',
                                 blabels=blabel,ignore_error=True)
-        pcm = ax.contourf(lon1,lat,plotvar1.squeeze().T*-1,levels = np.arange(-45,50,5),extend='both',
+        pcm = ax.contourf(lon1,lat,plotvar1.squeeze().T*-1,levels = np.arange(-50,55,5),extend='both',
                             cmap='cmo.balance')
+        
+        viz.label_sp(monid+1,usenumber=True,alpha=0.7,ax=ax,labelstyle="mon%s")
     
     cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.035,pad=0.05)
     cb.set_label("$\lambda_a$ : $W m^{2} \lambda_a$ ($\degree C ^{-1}$)")
     plt.suptitle("Heat Flux Damping For %s \n Enso Removed: %s | Lag: %i" % (dataset_name,ensorem,il+1))
-
-    
-    
-
-# Load sst
-sst = np.load()
-
+    plt.savefig("%sNHFLX_damping_lag%i_%s.png" % (figpath,il+1,dataset_name,),dpi=150)
 
 #%%
 
