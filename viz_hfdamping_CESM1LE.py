@@ -476,6 +476,7 @@ dssum  = ds.isel(thres=2).sum('lag')
 lons = dssum.lon.values
 lats = dssum.lat.values
 sstac   = dssum.SST.values # [ens x mon x lats x lons]
+nens,nmon,nlatr,nlonr=sstac.shape
 
 # Cut damping variables to the region
 bboxreg = [lons[0],lons[-1],lats[0],lats[-1]]
@@ -490,7 +491,6 @@ dampingr,lonr,latr, = proc.sel_region(damping_rs180,lon1,lat,bboxreg) # Cut Regi
 
 dampingr        = dampingr.transpose(2,1,0) # Flip to [otherdim x lat x lon]
 dampingr        = dampingr.reshape(damping.shape[:-2]+(len(latr),len(lonr))) # Uncombine dims
-
 
 
 # Now compute the pattern correlation
@@ -525,8 +525,6 @@ plt.savefig("%sPattern_Corr_T2_HFF_lag%i.png" % (figpath,1),dpi=200,bbox_inches=
 #%% Make some scatterplots
 
 # Overall scatterplot (Ok, it's not making much sense....)
-nens,nmon,nlatr,nlonr=sstac.shape
-
 fig,ax = plt.subplots(1,1)
 sc = ax.scatter(dampingr_in.flatten(),sstac.flatten(),
                 alpha=0.3)
@@ -617,15 +615,19 @@ for r in range(nreg):
 
 #%% Calculate topN composites for each region
 
-topN      = 5
+topN      = 250
 rid_sel   = [0,2,4,5,6]
 
 invar_raw = [dampingr_in,sstac] # (42, 12, 69, 65)
 invars    = [v.reshape(nens*nmon,nlatr,nlonr) for v in invar_raw] # Flatten indices : (nens*nmon x lat x lon)
+invar_names = ["Damping","T2"]
 
 t2_composites = np.zeros((nlatr,nlonr,nreg,2)) *np.nan # [lat x lon x region x type (0=min,1=max)]
 hf_composites = t2_composites.copy()
 pcolmarkers  = np.zeros((nmon,nens,nreg,2)) * np.nan
+
+
+kminmax = np.zeros((nreg,topN,2)) * np.nan #[region x rank x type (0=min,1=max)] 
 
 for r in tqdm(range(nreg)):
     
@@ -639,6 +641,10 @@ for r in tqdm(range(nreg)):
     # Make composites
     invars_max = [v[idmin2max[-topN:],:,:].mean(0) for v in invars]
     invars_min = [v[idmin2max[:topN],:,:].mean(0) for v in invars]
+    
+    # Save indices of the ens/mon
+    kminmax[r,:,1] = idmin2max[-topN:]
+    kminmax[r,:,0] = idmin2max[:topN]
     
     # Read out to array
     t2_composites[:,:,r,0] = invars_min[1].copy()
@@ -658,9 +664,18 @@ for r in tqdm(range(nreg)):
     pcolmarkers[:,:,r,1] = masktop.copy()
 
 
-#%% Plot Composites for each region
 
-r = 4
+#%% Test with index unraveling (so flattening is not needed anytime)
+
+# Try unravelling the index
+kunravel = np.unravel_index(kminmax[r,:,0].astype('int'),shape=(nens,nmon))
+v1 = invars[0].copy()
+v2 = invars[0].reshape(nens,nmon,nlatr,nlonr)
+test1 = v1[kminmax[r,:,0].astype('int'),:,:] # [event (ens, mon) x lat x lon]
+test2 = v2[kunravel[0],kunravel[1],:,:]
+print(np.nanmax(np.abs(test1-test2).flatten()))
+
+#%% Plot Composites for each region
 
 vnames_in = ("Heat Flux Feedback ($\lambda_a$: $Wm^{-2}\degree C^{-1}$)","$T_2$ (Months)")
 cints_all = (np.arange(-45,47.5,2.5),np.arange(0,16.5,0.5))
@@ -703,13 +718,13 @@ for r in range(nreg):
     
     for j in range(2):
         
-        if j == 0:
-            axin  = [ax1,ax2]
-            axislab = "Top %i \n Composite" % topN
+        if j == 0: # Start with 0 = Bottom, 1 = Top
+            axin  = [ax3,ax4]
+            axislab = "Bottom %i \n Composite" % topN
             
         else:
-            axin = [ax3,ax4]
-            axislab = "Bottom %i \n Composite" % topN
+            axin = [ax1,ax2]
+            axislab = "Top %i \n Composite" % topN
             
         for a,ax in enumerate(axin):
             
@@ -733,7 +748,58 @@ for r in range(nreg):
                 cb = fig.colorbar(cf,ax=ax,orientation='vertical',fraction=0.045)
                 
     plt.savefig("%sPattern_Corr_T2_HFF_Composites_lag%i_region%s_topN%i.png" % (figpath,1,regions[r],topN),dpi=200,bbox_inches='tight',transparent=False)
+
+
+#%% Just plot the top 5 composites
+
+
+mmname = ["Bot. %i"%topN,"Top %i"%topN]
+vnames = []
+for a in range(2):
     
+    cint_in = cints_all[a]
+    invar   = invars[a]
+    fig,axs = plt.subplots(2,topN,subplot_kw={'projection':ccrs.PlateCarree()},figsize=(16,4),constrained_layout=True)
+    
+    for r in tqdm(range(nreg)):
+        
+        for mm in range(2):
+            
+            for ik in range(topN):
+                
+                ax        = axs[mm-1,ik] # Plot top (1) first
+                
+                # Get index, Name
+                k         = int(kminmax[r,ik,mm])
+                kens,kmon = np.unravel_index(k,shape=(nens,nmon))
+                
+                
+                blabel = [0,0,0,0]
+                if mm == 1:
+                    blabel[-1] = 1
+                if ik == 0:
+                    blabel[0] = 1
+                    
+                    ax.text(-0.28, 0.35, '%s'% (mmname[mm]), va='bottom', ha='center',
+                        rotation='horizontal', rotation_mode='anchor',
+                        transform=ax.transAxes,fontsize=14)
+                
+                plotvar = invar[k,:,:]
+                
+                ax  = viz.add_coast_grid(ax,bbox=bboxplot,blabels=blabel,fill_color='gray')
+                ax.set_title("Ens %i, Mon %i" % (kens+1,kmon+1))
+                
+                cf = ax.contourf(lonr,latr,plotvar,
+                                 cmap=cmaps_all[a],levels=cint_in,extend='both',zorder=-1)
+        
+        
+        plt.savefig("%sPattern_Corr_T2_HFF_Indiv_lag%i_region%s_topN%i_%s.png" % (figpath,1,regions[r],topN,invar_names[a]),dpi=200,bbox_inches='tight',transparent=False)
+            
+            
+            
+            
+            
+        
 
 
 #%% Plot Relationship in each region for all months and fluxes
