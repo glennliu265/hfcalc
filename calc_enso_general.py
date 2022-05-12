@@ -3,9 +3,13 @@
 """
 
 Compute ENSO component, and remove it.
+Also compute the heat flux feedback.
 
 Works with output from preproc_ncep.py, but will work to generalize it
 This includes the flux data (non-anomalized )
+
+Plots:
+    - Plots for each month for a given simulation
 
 Created on Thu May  5 17:38:51 2022
 
@@ -49,14 +53,15 @@ tstart   = '1948-01-01'
 tend     = '2016-12-31'
 
 # Detrend Method
-detrend = 3
+detrend = 1
 
 # Variables and Dataset Name
 vnames_in    = ['ts','qnet']
-dataset_name = 'ncep_ncar'#'era20c'
+dataset_name = 'noaa_20cr_v2'
 
 #'CESM1_FULL_PIC'
 #'ncep_ncar'
+#'era20c'
 
 # Set coordinate names for dataset
 lonname = 'lon'
@@ -106,7 +111,7 @@ for v in vnames_in:
     # Open the dataset, slice to time period of interest
     da = xr.open_dataset(datpath+"%s_%s.nc" % (dataset_name,v))
     if croptime:
-        da = da.sel(time=slice(tstart,tend))
+        da = da.sel(time=slice(tstart,tend),drop=True)
     das.append(da)
     
     # Read out the variables # [time x lat x lon]
@@ -116,6 +121,11 @@ for v in vnames_in:
     lat   = da[latname].values
     times = da[tname].values
     print("Data loaded in %.2fs"%(time.time()-st))
+    
+    # Get the time range
+    # ------------------
+    timesyr = times.astype('datetime64[Y]').astype(int) +1970
+    timestr = "%ito%i" % (timesyr[0],timesyr[-1])
     
     # Remove monthly anomalies
     # ------------------------
@@ -161,10 +171,10 @@ for v in vnames_in:
     
     # Save detrended option, if set
     # -----------------------------
-    savename = "%s%s_%s_manom_detrend%i.nc" % (datpath,dataset_name,v,detrend)
+    savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
+    
     da = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
 
-    
 #%% Part 2, Compute ENSO Indices
 
 # ------------------- -------- General Portion --------------------------------
@@ -188,7 +198,7 @@ ex: ncep_ncar_ts_manom_detrend1.nc --> ncep_ncar_ENSO_detrend1_pcs3.npz
 st = time.time()
 
 # Open the dataset
-savename = "%s%s_ts_manom_detrend%i.nc" % (datpath,dataset_name,detrend)
+savename = "%s%s_ts_manom_detrend%i_%s.nc" % (datpath,dataset_name,detrend,timestr)
 da = xr.open_dataset(savename)
 
 # Slice to region
@@ -219,7 +229,7 @@ if debug:
     ax.set_title("EOF %i, Month %i\n Variance Explained: %.2f" % (ip+1,im+1,varexpall[im,ip]*100)+"%")
 
 # Save Output
-savename = "%senso/%s_ENSO_detrend%i_pcs%i.npz" % (datpath,dataset_name,detrend,pcrem)
+savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.npz" % (datpath,dataset_name,detrend,pcrem,timestr)
 np.savez(savename,**{
          'eofs': eofall, # [lon x lat x month x pc]
          'pcs': pcall,   # [Year, Month, PC]
@@ -245,13 +255,13 @@ Regresses and removes enso component at specified lag, etc
 allstart = time.time()
 
 # Load ENSO
-savename = "%senso/%s_ENSO_detrend%i_pcs%i.npz" % (datpath,dataset_name,detrend,pcrem)
+savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.npz" % (datpath,dataset_name,detrend,pcrem,timestr)
 ld = np.load(savename,allow_pickle=True)
 ensoid = ld['pcs'] # [year x  month x pc]
 
 for v in vnames_in:
     # Load Target variable
-    savename = "%s%s_%s_manom_detrend%i.nc" % (datpath,dataset_name,v,detrend)
+    savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
     da = xr.open_dataset(savename)
     
     # Read out the variables # [time x lat x lon]
@@ -265,11 +275,11 @@ for v in vnames_in:
     vout,ensopattern,times = scm.remove_enso(invar,ensoid,ensolag,monwin,reduceyr=reduceyr,times=times)
     
     # Save output variables
-    savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin)
+    savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
     da = proc.numpy_to_da(vout,times,lat,lon,v,savenetcdf=savename)
     
     # Save ENSO component
-    savename = "%senso/%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i.npz" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin)
+    savename = "%senso/%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
     np.savez(savename,**{
         'ensopattern':ensopattern,
         'lon':lon,
@@ -286,9 +296,9 @@ invars = []
 for v in vnames_in:
     
     if ensorem:
-        savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin)
+        savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
     else:
-        savename = "%s%s_%s_manom_detrend%i.nc" % (datpath,dataset_name,v,detrend)
+        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
     ds       = xr.open_dataset(savename)
     
     lat = ds.lat.values
@@ -307,7 +317,7 @@ damping,autocorr,crosscorr = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=T
 # Save heat flux (from hfdamping_mat2nc.py)
 # ----------------------------------------
 outvars  = [damping,crosscorr,autocorr]
-savename = "%s%s_hfdamping_ensorem%i_detrend%i.nc" % (datpath,dataset_name,ensorem,detrend)
+savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s.nc" % (datpath,dataset_name,ensorem,detrend,timestr)
 dims     = {'month':np.arange(1,13,1),
               "lag"  :np.arange(1,4,1),
               "lat"  :lat,
@@ -386,21 +396,15 @@ if debug: # Plot seasonal cycle
     cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.035,pad=0.05)
     cb.set_label("$\lambda_a$ : $W m^{2} \lambda_a$ ($\degree C ^{-1}$)")
     plt.suptitle("Heat Flux Damping For %s \n Enso Removed: %s | Lag: %i" % (dataset_name,ensorem,il+1))
-    plt.savefig("%sNHFLX_damping_lag%i_%s_detrend%i.png" % (figpath,il+1,dataset_name,detrend),dpi=150)
+    plt.savefig("%sNHFLX_damping_lag%i_%s_detrend%i_%s.png" % (figpath,il+1,dataset_name,detrend,timestr),dpi=150)
 
 #%%
-
-
-
-
 
 # Flip to desired dimensions
 
 # Compute monthly anomalies
 
 # Remove a trend from each point
-
-
 
 # Compute ENSO
 
