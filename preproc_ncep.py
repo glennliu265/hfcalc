@@ -77,13 +77,12 @@ elif dataset_name == 'noaa_20cr_v2':
     vname_ncep = ("uswrf","ulwrf","dswrf","dlwrf","shtfl","lhtfl","air")
     vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
     
-    
     ncnames = ('uswrf.sfc.mon.mean.nc',
                'ulwrf.sfc.mon.mean.nc',
                'dswrf.sfc.mon.mean.nc',
                'dlwrf.sfc.mon.mean.nc',
-               'shtfl.sfc.mon.mean.nc',
-               'lhtfl.sfc.mon.mean.nc',
+               'shtfl.mon.mean.nc',
+               'lhtfl.mon.mean.nc',
                'air.sfc.mon.mean.nc'
                )
     
@@ -175,7 +174,7 @@ ds_flns.flns.mean('time').plot(cmap='jet',vmin=-70,vmax=-40)
 for i in [4,5,6]:
     
     # Apply limask
-    ds = xr.open_dataset(ncs[i])
+    ds = xr.open_dataset(ncs[i])[vname_ncep[i]]
     
     ds *= limask[None,:,:] 
     if i < 6:
@@ -183,7 +182,7 @@ for i in [4,5,6]:
     
     # Save netcdf
     savenetcdf = "%s%s_%s.nc" % (outpath,dataset_name,vname_new[i])
-    dsn = ds[vname_ncep[i]].rename(vname_new[i])
+    dsn = ds.rename(vname_new[i])
     print(ds)
     dsn.to_netcdf(savenetcdf,
              encoding={vname_new[i]: {'zlib': True}})

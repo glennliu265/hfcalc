@@ -51,13 +51,13 @@ bboxplot    =  [-80,0,5,60]
 mons3       = [viz.return_mon_label(m,nletters=3) for m in np.arange(1,13)]
 
 #%% Functions
+
 def load_dampraw(mconfig,datpath):
     inpaths = datpath+"CESM-"+mconfig+"-Damping/"
     damping = np.load(inpaths+"NHFLX_Damping_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
     rflx    = np.load(inpaths+"NHFLX_Crosscorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
     rsst    = np.load(inpaths+"SST_Autocorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
     return damping,rsst,rflx
-
 
 #%% # Load the data (taken from calc_HF_func)
 
@@ -598,16 +598,15 @@ for v in range(2):
 
 dampingold = dampings[1] # [mon lag lat lon]
 
-newpath    = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/CESM1_FULL_PIC_hfdamping_ensorem0.nc"
+newpath    = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/CESM1_FULL_PIC_hfdamping_ensorem1.nc"
 dampingnew = xr.open_dataset(newpath).nhflx_damping.values 
 
 
 # Plot the differences
-cints   = np.arange(-10,10.5,0.5)
+cints   = np.arange(-5,5.025,0.025)
 loopmon = np.concatenate([[11,],np.arange(0,11,1)])
 fig,axs = plt.subplots(4,3,figsize=(16,16),facecolor='white',constrained_layout=True,
                     subplot_kw={'projection':ccrs.PlateCarree(central_longitude=0)})
-
 
 for i in tqdm(range(12)):
     
@@ -629,6 +628,10 @@ for i in tqdm(range(12)):
     pcm = ax.contourf(lon1,lat,plotvar1.squeeze().T,levels=cints,
                       cmap='cmo.balance',extend='both')
     
+    cl  = ax.contour(lon1,lat,plotvar1.squeeze().T,levels=cints,
+                      colors="k",linewidths=0.75)
+    ax.clabel(cl,cints[::2])
+    
     
     
     #msk    = rmasks[:,:,:,:,plotmcf,plotmsk]
@@ -641,5 +644,8 @@ plt.suptitle("New Damping - Old Damping",fontsize=16)
 plt.savefig("%sDamping_Differences_%s.png"%(figpath,outstr),dpi=150)
 
 
+hfdiff = dampingnew-dampingold
 
 
+
+#%%

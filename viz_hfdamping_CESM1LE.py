@@ -615,7 +615,7 @@ for r in range(nreg):
 
 #%% Calculate topN composites for each region
 
-topN      = 250
+topN      = 100
 rid_sel   = [0,2,4,5,6]
 
 invar_raw = [dampingr_in,sstac] # (42, 12, 69, 65)

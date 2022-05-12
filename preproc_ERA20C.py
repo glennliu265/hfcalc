@@ -163,7 +163,7 @@ print("Saving netCDF to %s"% (savenetcdf,))
 ds_qnet = xr.open_dataset(savenetcdf)
 ds_qnet.qnet.mean('time').plot(cmap='jet',vmin=-200,vmax=200)
 
-#%%
+#%% 
 
 
 
