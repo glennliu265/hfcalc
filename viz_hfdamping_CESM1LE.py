@@ -71,7 +71,7 @@ def plot_hfdamping(e,plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None):
 
 # Paths, Names
 datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
-figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220502/"
+figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220601/"
 ncname  = "CESM1-LE_NHFLX_Damping_raw.nc"
 proc.makedir(figpath)
 
@@ -99,7 +99,6 @@ lat     = ds.latitude.values
 mon     = ds.month.values
 ens     = ds.ensemble.values
 lag     = ds.lag_month.values
-
 
 #%%Significance Test
 
@@ -159,19 +158,15 @@ for m in range(12):
 
 #%% Do the Same thing, but for the cross/autocorrelations
 
-vlims  = [-.5,1]
-
-
-
-
+vlims     = [-.5,1]
 cints_all = [np.arange(-.5,.55,0.05),np.arange(-1,1.1,.1)]
 
 
-invars = [rflx,rsst]
+invars    = [rflx,rsst]
 
-rnames = ["crosscorr","autocorr"]
+rnames       = ["crosscorr","autocorr"]
 rnames_fancy = ("NHFLX-SST Cross-correlation","SST Autocorrelation")
-mskin  = [mflx,msst]
+mskin        = [mflx,msst]
 
 for v in range(2):
     for m in range(12):
@@ -470,15 +465,43 @@ plt.savefig("%sNHFLX_Damping_Correlation_CESM1LE_Composites_top%i.png" % (figpat
 
 
 # Load Data
-ncname = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/HTR-FULL_SST_autocorrelation_thres0.nc"
-ds     = xr.open_dataset(ncname)
-dssum  = ds.isel(thres=2).sum('lag')
-lons = dssum.lon.values
-lats = dssum.lat.values
-sstac   = dssum.SST.values # [ens x mon x lats x lons]
-nens,nmon,nlatr,nlonr=sstac.shape
+npz = True
 
-# Cut damping variables to the region
+if npz:
+    # Open and Load
+    ncname ="/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/HTR-FULL_SST_autocorrelation_thres0_lag00to60.npz"
+    ld = np.load(ncname,allow_pickle=True)
+    counts     = ld['class_count']
+    acs        = ld['acs']
+    cfs        = ld['cfs']
+    thresholds = ld['lon']
+    lons       = ld['lon']
+    lats       = ld['lat']
+    lags       = ld['lags']
+    threshlabs = ld['threslabs']
+    
+    # Calculate T2
+    t2         = 1 + 2 * np.trapz(acs**2,x=lags,axis=-1) # [lon x lat x ens x mon x thres]
+    nlon,nlat,nens,nmon,nthres = t2.shape
+    
+    # transpose to order # [ens x thres x mon x lat x lon]
+    t2 = t2.transpose(2,4,3,1,0)
+    
+else:
+    ncname ="/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/HTR-FULL_SST_autocorrelation_thres0_lag00to60.nc"
+    ds     = xr.open_dataset(ncname)
+    dssum  = ds.isel(thres=2).sum('lag')
+    lons   = dssum.lon.values
+    lats   = dssum.lat.values
+    sstac  = dssum.SST.values # [ens x mon x lats x lons]
+    nens,nmon,nlatr,nlonr=sstac.shape
+
+
+
+
+
+
+#%% Prepare to Cut damping variables to the region
 bboxreg = [lons[0],lons[-1],lats[0],lats[-1]]
 
 # Reshape damping (also flip longitude, and cut region)
@@ -499,7 +522,105 @@ patcorr_t2 = np.zeros((nens,nmon)) * np.nan
 for e in tqdm(range(nens)):
     for m in range(12):
         patcorr_t2[e,m] = proc.patterncorr(dampingr_in[e,m,:,:],sstac[e,m,:,:])
-        
+
+#%% Plot Intermember Variability (Stdev)
+
+ithres = -1
+ilag   = 0
+imon   = 11
+annmean = True
+
+bboxplot  = [-80,0,5,65]
+if annmean:
+    
+    t2_std  = np.nanstd(t2[:,ithres,:,:,:],0).mean(0) # [Lat x Lon]
+    lbd_std = np.nanstd(dampingr[:,ilag,:,:,:],0).mean(0) 
+else:
+    t2_std  = np.nanstd(t2[:,ithres,imon,:,:],0) # [Lat x Lon]
+    lbd_std = np.nanstd(dampingr[:,ilag,imon,:,:],0) 
+    
+levels  = np.arange(0,7.5,.5)
+
+
+lbd_levels = np.arange(0,33,3)
+
+fig,axs = plt.subplots(1,2,subplot_kw={'projection':ccrs.PlateCarree()},
+                      constrained_layout=True,figsize=(12,4))
+
+# -------------------- (T2 Stedev)
+ax     = axs[0]
+ax     = viz.add_coast_grid(ax,bbox=bboxplot,fill_color='gray')
+pcm    = ax.contourf(lons,lats,t2_std,levels=levels,cmap='cmo.thermal',extend='both')
+cl     = ax.contour(lons,lats,t2_std,levels=levels,colors="w",linewidths=0.35)
+ax.clabel(cl,levels=levels[::4])
+cb = fig.colorbar(pcm,ax=ax)
+cb.set_label("$\sigma_{T_2}$ (Months)")
+ax.set_title("$T_2$ for SST")
+
+# -------------------- (Lbd Stdv)
+ax     = axs[1]
+ax     = viz.add_coast_grid(ax,bbox=bboxplot,fill_color='gray')
+pcm1    = ax.contourf(lons,lats,lbd_std,levels=lbd_levels,cmap='cmo.thermal',extend='both')
+cl     = ax.contour(lons,lats,lbd_std,levels=lbd_levels,colors="w",linewidths=0.35)
+ax.clabel(cl,levels=lbd_levels[::4])
+cb1 = fig.colorbar(pcm1,ax=ax)
+cb1.set_label("$\sigma_{\lambda_a}$ ($Wm^{-2}\degree C^{-1}$)")
+ax.set_title("$\lambda_a$")
+
+
+
+plt.suptitle("Intermember Variability in CESM1 Historical (42-members)")
+savename = "%sIntermemVar_T2_SST_CESM1LENS_HTR_lag%i_imon%i_ithres%i.png" % (figpath,ilag+1,imon+1,ithres)
+if annmean:
+    savename = proc.addstrtoext(savename,"annmean")
+plt.savefig(savename,dpi=150,bbox_inches='tight')
+
+#%% Do the same, but for cross and autocorrelation
+
+corrlevels = np.arange(0,0.105,0.005)
+
+fig,axs = plt.subplots(1,2,subplot_kw={'projection':ccrs.PlateCarree()},
+                      constrained_layout=True,figsize=(12,4))
+
+# -------------------- (T2 Stedev)
+if annmean:
+    plotvar = np.nanstd(rflx[:,ilag,:,:,:],0).mean(0)
+else:
+    plotvar = np.nanstd(rflx[:,ilag,imon,:,:],0)
+
+ax     = axs[0]
+ax     = viz.add_coast_grid(ax,bbox=bboxplot,fill_color='gray')
+pcm    = ax.contourf(lon,lat,plotvar,levels=corrlevels,cmap='cmo.thermal',extend='both')
+cl     = ax.contour(lon,lat,plotvar,levels=corrlevels,colors="w",linewidths=0.35)
+ax.clabel(cl,levels=corrlevels[::4])
+cb = fig.colorbar(pcm,ax=ax)
+#cb.set_label("$\sigma_{T_2}$ (Months)")
+ax.set_title("SST-FLX Cross Correlation")
+
+# -------------------- (Lbd Stdv)
+if annmean:
+    plotvar = np.nanstd(rsst[:,ilag,:,:,:],0).mean(0)
+else:
+    plotvar = np.nanstd(rsst[:,ilag,imon,:,:],0)
+ax     = axs[1]
+ax     = viz.add_coast_grid(ax,bbox=bboxplot,fill_color='gray')
+pcm1    = ax.contourf(lon,lat,plotvar,levels=corrlevels,cmap='cmo.thermal',extend='both')
+cl     = ax.contour(lon,lat,plotvar,levels=corrlevels,colors="w",linewidths=0.35)
+ax.clabel(cl,levels=corrlevels[::4])
+cb1 = fig.colorbar(pcm1,ax=ax)
+# cb1.set_label("$\sigma_{\lambda_a}$ ($Wm^{-2}\degree C^{-1}$)")
+ax.set_title("SST Autocorrelation")
+
+
+
+plt.suptitle("Intermember Variability in CESM1 Historical (42-members)")
+savename = "%sIntermemVar_correlations_CESM1LENS_HTR_lag%i_mon%i_thres%i.png" % (figpath,ilag+1,imon+1,ithres)
+if annmean:
+    savename = proc.addstrtoext(savename,"annmean")
+plt.savefig(savename,dpi=150,bbox_inches='tight')
+
+
+
         
 #%% Visualize pcolor of pattern correlation for each month
 
@@ -507,6 +628,7 @@ fig,ax = plt.subplots(1,1,figsize=(12,4))
 
 pcm = ax.pcolormesh(ens,np.arange(1,13,1),patcorr_t2.T,shading='nearest',
                     vmin=-.8,vmax=.8,cmap='cmo.balance')
+
 ax.set_aspect('equal')
 ax.grid(True,ls='dotted')
 cb = fig.colorbar(pcm,ax=ax,fraction=0.025,pad=0.01,orientation='vertical')
@@ -519,7 +641,7 @@ ax.set_yticklabels(months)
 ax.set_xlabel("Ensemble")
 ax.set_ylabel("Month (HFF) or Reference Month for Lag ($T_2$)")
 ax.set_title("Pattern Correlation (Heat Flux Feedback and SST $T_2$ Timescale)",y=1.01)
-plt.savefig("%sPattern_Corr_T2_HFF_lag%i.png" % (figpath,1),dpi=200,bbox_inches='tight',transparent=False)
+plt.savefig("%sPattern_Corr_T2_HFF_lag%i_mon%i_thres%i.png" % (figpath,ilag,imon,ithres),dpi=200,bbox_inches='tight',transparent=False)
 
 
 #%% Make some scatterplots
