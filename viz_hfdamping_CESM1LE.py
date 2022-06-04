@@ -41,7 +41,6 @@ import scm
 import importlib
 importlib.reload(viz)
 
-
 #%%
 
 def plot_hfdamping(e,plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None):
@@ -71,7 +70,7 @@ def plot_hfdamping(e,plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None):
 
 # Paths, Names
 datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
-figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220601/"
+figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220609/"
 ncname  = "CESM1-LE_NHFLX_Damping_raw.nc"
 proc.makedir(figpath)
 
@@ -523,12 +522,21 @@ for e in tqdm(range(nens)):
     for m in range(12):
         patcorr_t2[e,m] = proc.patterncorr(dampingr_in[e,m,:,:],sstac[e,m,:,:])
 
+# -------------------------------------
 #%% Plot Intermember Variability (Stdev)
 
 ithres = -1
 ilag   = 0
 imon   = 11
 annmean = True
+
+plotpoint = [-72,39] # Set to None to not plot a point, otherwise lat,lon
+
+
+if annmean is False:
+    monstr =  str(imon+1)
+else:
+    monstr = "Ann. Mean"
 
 bboxplot  = [-80,0,5,65]
 if annmean:
@@ -568,14 +576,30 @@ cb1.set_label("$\sigma_{\lambda_a}$ ($Wm^{-2}\degree C^{-1}$)")
 ax.set_title("$\lambda_a$")
 
 
+if plotpoint is not None:
+    for ax in axs:
+        ax.plot(plotpoint[0],plotpoint[1],marker="x",color='k',markersize=30)
 
-plt.suptitle("Intermember Variability in CESM1 Historical (42-members)")
-savename = "%sIntermemVar_T2_SST_CESM1LENS_HTR_lag%i_imon%i_ithres%i.png" % (figpath,ilag+1,imon+1,ithres)
+plt.suptitle("Intermember Variability in CESM1 Historical (42-members), Lag %i, Month: %s"% (ilag+1,monstr))
+savename = "%sIntermemVar_T2_SST_CESM1LENS_HTR_lag%i_imon%s_ithres%i.png" % (figpath,ilag+1,monstr,ithres)
 if annmean:
     savename = proc.addstrtoext(savename,"annmean")
 plt.savefig(savename,dpi=150,bbox_inches='tight')
 
+# ------------------------------------------------
 #%% Do the same, but for cross and autocorrelation
+# ------------------------------------------------
+ilag   = 0
+imon   = 11
+annmean = True
+
+plotpoint = [] # Set to None to not plot a point
+
+
+if annmean is False:
+    monstr =  str(imon+1)
+else:
+    monstr = "Ann. Mean"
 
 corrlevels = np.arange(0,0.105,0.005)
 
@@ -613,15 +637,73 @@ ax.set_title("SST Autocorrelation")
 
 
 
-plt.suptitle("Intermember Variability in CESM1 Historical (42-members)")
-savename = "%sIntermemVar_correlations_CESM1LENS_HTR_lag%i_mon%i_thres%i.png" % (figpath,ilag+1,imon+1,ithres)
+plt.suptitle("Intermember Variability in CESM1 Historical (42-members), Lag %i, Month: %s"% (ilag+1,monstr))
+savename = "%sIntermemVar_correlations_CESM1LENS_HTR_lag%i_mon%s_thres%i.png" % (figpath,ilag+1,monstr,ithres)
 if annmean:
     savename = proc.addstrtoext(savename,"annmean")
 plt.savefig(savename,dpi=150,bbox_inches='tight')
 
 
+#%% Examamine actual values at a point
 
-        
+klon,klat = proc.find_latlon(plotpoint[0],plotpoint[1],lons,lats)
+
+locfn,locstr = proc.make_locstring(plotpoint[0],plotpoint[1])
+
+fig,axs    = plt.subplots(3,1,figsize=(12,8))
+
+
+# Get variables to plot
+selvars  = [dampingr,rflx,rsst]
+plotvars = [v[:,ilag,:,klat,klon].mean(-1) for v in selvars]
+
+# Set names, colors
+bcols = ["cornflowerblue","goldenrod","orchid"]
+bnams = ["Heat FLux Feedback","Cross-Correlation","Autocorrelation"]
+ylims = ([0,110],[.15,.30],[.75,.88])
+
+
+
+for v in range(3):
+    ax = axs[v]
+    plotvar = plotvars[v]
+    
+    ax.bar(np.arange(1,43),plotvar,color=bcols[v],alpha=0.75)
+    ax.axhline(np.mean(plotvar),ls='solid',color="k",lw=0.55)
+    
+    
+    ax.set_xticks(np.arange(1,43))
+    ax.set_ylabel(bnams[v])
+    ax.set_ylim(ylims[v])
+    ax.grid(True,ls='dotted')
+
+plt.suptitle("CESM1-LENS, Values at %s"%(locstr),y=.93,fontsize=14)
+
+
+# # Plot the Damping value
+# ax = axs[0]
+# lbd_bp    = dampingr[:,ilag,:,klat,klon].mean(-1)
+# ax.bar(np.arange(1,43),lbd_bp)
+# ax.set_xticks(np.arange(1,43))
+# ax.set_ylabel("Heat Flux Feedback")
+
+# # Plot Cross Correlation
+# ax = axs[1]
+# plotvar    = rflx[:,ilag,:,klat,klon].mean(-1)
+# ax.bar(np.arange(1,43),plotvar,color='r')
+# ax.set_xticks(np.arange(1,43))
+# ax.set_ylabel("Cross-Correlation")
+# ax.set_ylim(.15,.30)
+
+# # Plot Cross Correlation
+# ax = axs[2]
+# plotvar    = rsst[:,ilag,:,klat,klon].mean(-1)
+# ax.bar(np.arange(1,43),plotvar,color='violet')
+# ax.set_xticks(np.arange(1,43))
+# ax.set_ylabel("Autocorrelation")
+# ax.set_ylim(.75,.88)
+
+plt.savefig("%sHFF_values_at_%s_CESM1LENS.png"%(figpath,locfn),dpi=150,bbox_inches='tight')
 #%% Visualize pcolor of pattern correlation for each month
 
 fig,ax = plt.subplots(1,1,figsize=(12,4))
