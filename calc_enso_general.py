@@ -38,7 +38,6 @@ from amv import proc,viz
 import scm
 #%% User Settings
 
-
 # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
 datpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
 figpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220511/"
@@ -82,10 +81,10 @@ monwin   = 3    # Window of months to consider
 
 
 # Part 4 (HFF Calculations) -------------------------------------------
-ensorem = True
+ensorem  = True
 
 # Toggles
-debug   = True # Print Figures, statements for debugging
+debug    = True # Print Figures, statements for debugging
 
 
 #%%

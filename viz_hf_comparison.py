@@ -42,13 +42,20 @@ nclist  = ("CESM1_FULL_PIC_hfdamping_ensorem1_detrend1.nc",
            "noaa_20cr_v2_hfdamping_ensorem1_detrend3.nc",
            "ncep_ncar_hfdamping_ensorem1_detrend3.nc"
           )
+
+
+nclist  = ("CESM1_FULL_PIC_hfdamping_ensorem1_detrend1.nc",
+           'era20c_hfdamping_ensorem1_detrend1_1948to2010.nc',
+           'noaa_20cr_v2_hfdamping_ensorem1_detrend1_1948to2014.nc',
+           )
+
 ncnames = ("CESM1-PiC",
            "ERA-20C Reanalysis",
            "NOAA-CIRES 20CR v2c",
            "NCEP-NCAR Reanalysis I"
            )
 
-figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220511/"
+figpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220602/"
 proc.makedir(figpath)
 
 # Plotting params
@@ -56,15 +63,14 @@ proj     = ccrs.PlateCarree(central_longitude=0)
 bboxplot = [-80,0,10,62]
 cints    = np.arange(-50,55,5)
 
-vname = 'nhflx_damping'
-
-mons3 = proc.get_monstr(3)
+vname    = 'nhflx_damping'
+mons3    = proc.get_monstr(3)
 
 
 
 #%% Load in the files
 
-das = []
+das      = []
 for nc in nclist:
     da = xr.open_dataset(datpath+nc)
     das.append(da[vname]*-1)
@@ -72,8 +78,6 @@ for nc in nclist:
     
 
 #%% Make the plot for a specific month,lag
-
-
 
 ilag = 0
 imon = 0

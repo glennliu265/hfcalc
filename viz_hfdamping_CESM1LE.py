@@ -386,8 +386,6 @@ maskbot[idmin2max[:topN]] = 1
 masktop = (masktop.reshape(nens,nmon)).T
 maskbot = (maskbot.reshape(nens,nmon)).T
 
-
-
 #%% Plot differences, with identified events
 
 fig,ax = plt.subplots(1,1,figsize=(12,4))
