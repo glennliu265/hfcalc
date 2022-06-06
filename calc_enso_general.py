@@ -199,8 +199,8 @@ for ensnum in range(1,43):
         # -----------------------------
         savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
-        
+            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
+            
         da = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
     
     #%% Part 2, Compute ENSO Indices
@@ -228,7 +228,7 @@ for ensnum in range(1,43):
     # Open the dataset
     savename = "%s%s_ts_manom_detrend%i_%s.nc" % (datpath,dataset_name,detrend,timestr)
     if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
     da = xr.open_dataset(savename)
     
     # Slice to region
@@ -261,7 +261,7 @@ for ensnum in range(1,43):
     # Save Output
     savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.npz" % (datpath,dataset_name,detrend,pcrem,timestr)
     if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
     np.savez(savename,**{
              'eofs': eofall, # [lon x lat x month x pc]
              'pcs': pcall,   # [Year, Month, PC]
@@ -289,7 +289,7 @@ for ensnum in range(1,43):
     # Load ENSO
     savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.npz" % (datpath,dataset_name,detrend,pcrem,timestr)
     if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
     ld = np.load(savename,allow_pickle=True)
     ensoid = ld['pcs'] # [year x  month x pc]
     
@@ -297,7 +297,7 @@ for ensnum in range(1,43):
         # Load Target variable
         savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         da = xr.open_dataset(savename)
         
         # Read out the variables # [time x lat x lon]
@@ -313,13 +313,13 @@ for ensnum in range(1,43):
         # Save output variables
         savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         da = proc.numpy_to_da(vout,times,lat,lon,v,savenetcdf=savename)
         
         # Save ENSO component
         savename = "%senso/%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
         np.savez(savename,**{
             'ensopattern':ensopattern,
             'lon':lon,
@@ -340,7 +340,7 @@ for ensnum in range(1,43):
         else:
             savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         ds       = xr.open_dataset(savename)
         
         lat = ds.lat.values
@@ -361,7 +361,7 @@ for ensnum in range(1,43):
     outvars  = [damping,crosscorr,autocorr]
     savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s.nc" % (datpath,dataset_name,ensorem,detrend,timestr)
     if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum))
+        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
     dims     = {'month':np.arange(1,13,1),
                   "lag"  :np.arange(1,4,1),
                   "lat"  :lat,
