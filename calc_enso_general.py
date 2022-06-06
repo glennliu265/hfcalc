@@ -92,9 +92,7 @@ ensorem  = True
 # Toggles
 debug    = False # Print Figures, statements for debugging
 
-
-for ensnum in range(1,43):
-
+for ensnum in range(1,41):
 
     #%%
     
@@ -116,10 +114,9 @@ for ensnum in range(1,43):
     lensflag = False
     if 'rcp85' in dataset_name:
         lensflag = True
-    
-    das = []
+
     for v in vnames_in:
-        
+            
         # Open the dataset, slice to time period of interest
         if lensflag:
             da = xr.open_dataset("%sCESM1_%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
@@ -128,15 +125,8 @@ for ensnum in range(1,43):
         
         if croptime:
             da = da.sel(time=slice(tstart,tend),drop=True)
-        das.append(da)
-        
-        # For LENs case, remove ensavg
-        # ----------------------------
-        if lensflag:
-            eavg_fname  = "%sCESM1_rcp85_%s_ensAVG.nc" % (datpath,v)
-            ensavg      = xr.open_dataset(eavg_fname)
-            da -= ensavg
-        
+            
+    
         # Read out the variables # [time x lat x lon]
         st    = time.time()
         invar = da[v].values
@@ -145,18 +135,28 @@ for ensnum in range(1,43):
         times = da[tname].values
         print("Data loaded in %.2fs"%(time.time()-st))
         
+        # For LENs case, remove ensavg
+        # ----------------------------
+        if lensflag:
+            eavg_fname  = "%sCESM1_rcp85_%s_ensAVG.nc" % (datpath,v)
+            ensavg      = xr.open_dataset(eavg_fname)
+            ensavg      = ensavg.sel(time=slice(tstart,tend),drop=True)
+            ensavg      = ensavg[v].values
+            
+            invar = invar - ensavg
+        
         # Get the time range
         # ------------------
         timesyr = times.astype('datetime64[Y]').astype(int) +1970
         timestr = "%ito%i" % (timesyr[0],timesyr[-1])
-        
+
         # Remove monthly anomalies
         # ------------------------
         nmon,nlat,nlon = invar.shape
         manom,invar = proc.calc_clim(invar,0,returnts=1) # Calculate clim with time in axis 0
         vanom = invar - manom[None,:,:,:]
         vanom = vanom.reshape(nmon,nlat,nlon) # Reshape back to [time x lat x lon]
-        
+    
         # Flip latitude
         if lat[0] > lat[-1]: # If latitude is decreasing...
             lat   = np.flip(lat)
@@ -194,14 +194,14 @@ for ensnum in range(1,43):
             data_dt = data_dt.reshape(nmon,nlat,nlon) # Back to [time x lat x lon]
         else:
             data_dt = vanom
-        
-        # Save detrended option, if set
-        # -----------------------------
-        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
-        if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
             
-        da = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
+            # Save detrended option, if set
+            # -----------------------------
+            savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
+            if lensflag:
+                savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
+                
+            da = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
     
     #%% Part 2, Compute ENSO Indices
     
@@ -294,6 +294,7 @@ for ensnum in range(1,43):
     ensoid = ld['pcs'] # [year x  month x pc]
     
     for v in vnames_in:
+        
         # Load Target variable
         savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
         if lensflag:
@@ -354,11 +355,11 @@ for ensnum in range(1,43):
     
     #% Calculate heat flux
     sst,flx = invars
-    damping,autocorr,crosscorr = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=True)
-    
+    damping,autocorr,crosscorr,autocov,cov = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=True,return_cov=True)
+
     # Save heat flux (from hfdamping_mat2nc.py)
     # ----------------------------------------
-    outvars  = [damping,crosscorr,autocorr]
+    outvars  = [damping,crosscorr,autocorr,cov,autocov]
     savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s.nc" % (datpath,dataset_name,ensorem,detrend,timestr)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
@@ -370,14 +371,19 @@ for ensnum in range(1,43):
     # Set some attributes
     varnames = ("nhflx_damping",
                 "sst_flx_crosscorr",
-                "sst_autocorr")
+                "sst_autocorr",
+                "cov",
+                "autocov")
     varlnames = ("Net Heat Flux Damping",
                  "SST-Heat Flux Cross Correlation",
-                 "SST Autocorrelation")
+                 "SST Autocorrelation",
+                 "SST-Heat Flux Covariance",
+                 "SST Autocovariance")
     units     = ("W/m2/degC",
                  "Correlation",
-                 "Correlation")
-    
+                 "Correlation",
+                 "W/m2*degC",
+                 "degC^2")
     
     das = []
     for v,name in enumerate(varnames):
