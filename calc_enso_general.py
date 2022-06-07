@@ -92,9 +92,12 @@ ensorem  = True
 # Toggles
 debug    = False # Print Figures, statements for debugging
 
-for ensnum in range(1,41):
 
-    #%%
+#%% Main Body
+st_script = time.time()
+
+
+for ensnum in range(1,41):
     
     # Part 1: Preprocess Variables (Anomalize, Detrend, Flip latitude if needed)
     
@@ -383,10 +386,11 @@ for ensnum in range(1,41):
                  "Correlation",
                  "Correlation",
                  "W/m2*degC",
-                 "degC^2")
+                 "degC2")
     
     das = []
     for v,name in enumerate(varnames):
+
         attr_dict = {'long_name':varlnames[v],
                      'units':units[v]}
         da = xr.DataArray(outvars[v],
@@ -447,7 +451,7 @@ for ensnum in range(1,41):
         cb.set_label("$\lambda_a$ : $W m^{2} \lambda_a$ ($\degree C ^{-1}$)")
         plt.suptitle("Heat Flux Damping For %s \n Enso Removed: %s | Lag: %i" % (dataset_name,ensorem,il+1))
         plt.savefig("%sNHFLX_damping_lag%i_%s_detrend%i_%s.png" % (figpath,il+1,dataset_name,detrend,timestr),dpi=150)
-
+print("Script Ran to Completion in %.2fs"%(time.time()-st_script))
 #%%
 
 # Flip to desired dimensions
