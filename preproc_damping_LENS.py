@@ -12,19 +12,20 @@ Created on Wed Jun 15 15:41:48 2022
 @author: gliu
 """
 
-
-
-import numpy as np
-import xarray as xr
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 import glob
 
+import numpy as np
+import xarray as xr
 import xesmf as xe
+import matplotlib.pyplot as plt
 
 #%% User Edits
 
-modelname = "gfdl_esm2m_lens"
+modelname = "csiro_mk36_lens"
+
+
+#"gfdl_esm2m_lens"
 
 datpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/Amon/" % modelname
 outpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
@@ -51,6 +52,8 @@ vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
 def get_lens_nc(modelname,vname,e,compname="Amon"):
     if modelname == "gfdl_esm2m_lens":
         ncname = "%s_%s_GFDL-ESM2M_historical_rcp85_r%ii1p1_195001-210012.nc" % (vname,compname,e+1)
+    elif modelname == "csiro_mk36_lens":
+        ncname = "%s_%s_CSIRO-Mk3-6-0_historical_rcp85_r%ii1p1_185001-210012.nc" % (vname,compname,e+1)
     return ncname
     
 
@@ -110,8 +113,14 @@ for e in tqdm(range(nens)):
     
     # Get netCDF names
     icenc  = get_lens_nc(modelname,"sic",e,compname="OImon")
+    
     if modelname == "gfdl_esm2m_lens":
         landnc = "sftlf_fx_GFDL-ESM2M_historical_r0i0p0.nc"
+    elif modelname == "csiro_mk36_lens":
+        
+        landpath = outpath 
+        landnc   = "barot_mask_csiro_mk36_lens.nc"
+        
     else:
         landnc = landnc = get_lens_nc(modelname,"sftlf",e,compname="fx")
     
@@ -119,20 +128,34 @@ for e in tqdm(range(nens)):
     dsice  = xr.open_dataset(icepath+icenc)
     dsland = xr.open_dataset(landpath+landnc)
     if e == 0: # Get Lat Lon
-        lat   = dsland.lat.values
-        lon   = dsland.lon.values
+    
+        if modelname == "csiro_mk36_lens": # Lat/Lon in other dataset
+            ncpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/csiro_mk36_lens/Amon/ts/"
+            ncname = "ts_Amon_CSIRO-Mk3-6-0_historical_rcp85_r10i1p1_185001-210012.nc"
+            dstemp = xr.open_dataset(ncpath+ncname)
+            lat = dstemp.lat.values
+            lon = dstemp.lon.values
+            
+        else:
+            lat   = dsland.lat.values
+            lon   = dsland.lon.values
         
     
-    # Regrid ice values (based on prep_mld_PIC.py)
+    # Regrid ice/land values (based on prep_mld_PIC.py)
     ds_out    = xr.Dataset({'lat':lat,'lon':lon}) # Define new grid (note: seems to support flipping longitude)
     regridder = xe.Regridder(dsice,ds_out,method,periodic=True)
     daproc    = regridder(dsice[mvnames[1]]) # Need to input dataarray
-    
     # Get land and ice fractions
-    landfrac = dsland.sftlf.values
+    if modelname == "csiro_mk36_lens": # Regrid landmask as well
+        regridder_land = xe.Regridder(dsland,ds_out,method,periodic=True)
+        daproc_land    = regridder_land(dsland['landmask'])
+        landfrac = daproc_land.values
+    else:
+        landfrac = dsland.sftlf.values
     icefrac  = daproc.values
     
-    
+    if np.any(icefrac>1):
+        icefrac /=100 # Convert from % to decimal
     
     # Preallocate
     emask = np.ones((len(lat),len(lon))) * np.nan 
@@ -140,7 +163,10 @@ for e in tqdm(range(nens)):
     # Make Landmask
     invar   = landfrac
     inthres = mthres[0] 
-    maskpts = ((invar <= inthres)) # 0 is Land
+    if modelname == "csiro_mk36_lens":
+        maskpts = ~np.isnan(invar)
+    else:
+        maskpts = ((invar <= inthres)) # 0 is Land
     emask[maskpts==1] = 1 # 1 means it is ocean point
     
     # Make Ice Mask
