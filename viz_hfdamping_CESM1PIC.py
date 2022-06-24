@@ -185,7 +185,6 @@ plotmsk1 *= limask180
 
 pcm = ax.contourf(lon1,lat,plotvar1.T,levels=cints,cmap='cmo.balance',extend='both')
 
-
 # Plot significant points
 viz.plot_mask(lon1,lat,plotmsk1,reverse=False,ax=ax,markersize=.75)
 

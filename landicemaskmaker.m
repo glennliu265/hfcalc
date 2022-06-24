@@ -74,8 +74,7 @@ for idx = 1:length(mnum)
         lnd = ncread(lndname,'LANDFRAC');
         ice = ncread(icename,'ICEFRAC');
     end
-
-
+    
     %% Make land mask -----
     % Get average landfracs
     meanLF = nanmean(lnd,3);

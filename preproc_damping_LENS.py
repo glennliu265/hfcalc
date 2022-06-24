@@ -22,9 +22,9 @@ import matplotlib.pyplot as plt
 
 #%% User Edits
 
-modelname = "csiro_mk36_lens"
+modelname = "canesm2_lens"
 
-
+#"csiro_mk36_lens"
 #"gfdl_esm2m_lens"
 
 datpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/Amon/" % modelname
@@ -54,9 +54,10 @@ def get_lens_nc(modelname,vname,e,compname="Amon"):
         ncname = "%s_%s_GFDL-ESM2M_historical_rcp85_r%ii1p1_195001-210012.nc" % (vname,compname,e+1)
     elif modelname == "csiro_mk36_lens":
         ncname = "%s_%s_CSIRO-Mk3-6-0_historical_rcp85_r%ii1p1_185001-210012.nc" % (vname,compname,e+1)
+        
+    elif modelname == "canesm2_lens":
+        ncname = "%s_%s_CanESM2_historical_rcp85_r%ii1p1_195001-210012.nc" % (vname,compname,e+1)
     return ncname
-    
-
 
 #%% Get list of files to see total ensemble count
 
@@ -65,9 +66,6 @@ nclist   = glob.glob(ncsearch)
 nclist.sort()
 nens = len(nclist)
 print(len(nclist))
-
-
-
 
 #%% Functions
 
@@ -116,8 +114,9 @@ for e in tqdm(range(nens)):
     
     if modelname == "gfdl_esm2m_lens":
         landnc = "sftlf_fx_GFDL-ESM2M_historical_r0i0p0.nc"
+    elif modelname == "canesm2_lens":
+        landnc = "sftlf_fx_CanESM2_historical_r0i0p0.nc"
     elif modelname == "csiro_mk36_lens":
-        
         landpath = outpath 
         landnc   = "barot_mask_csiro_mk36_lens.nc"
         

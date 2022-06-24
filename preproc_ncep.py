@@ -22,7 +22,6 @@ hfls (latent hflx)
 To get started, mount the WHOI CMIP5 server by using
 "connect to folder" : smb\\cmip5.whoi.edu\data
 
-
 General steps
 - Combine upwelling/downwelling radiation terms
 - Calculate Net Heat Flux, downward positive

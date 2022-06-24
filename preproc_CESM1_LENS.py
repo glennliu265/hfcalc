@@ -163,7 +163,6 @@ for e in tqdm(range(nens)):
     da.to_netcdf(savename,
              encoding={'qnet': {'zlib': True}})
     
-    
 # Compute and save ensemble averages
 vnames = ['ts','qnet']
     
