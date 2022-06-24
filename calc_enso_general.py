@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-
 Compute ENSO component, and remove it.
 Also compute the heat flux feedback.
 
@@ -35,7 +34,7 @@ if stormtrack:
     
     # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
     datpath =  "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
-    figpath =  "/home/glliu/02_Figures/01_WeeklyMeetings/20220609"
+    figpath =  "/home/glliu/02_Figures/01_WeeklyMeetings/20220622"
 else:
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/03_Scripts/stochmod/model/")
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
@@ -53,20 +52,32 @@ proc.makedir(figpath)
 
 # Select time crop
 croptime = True
-tstart   = '2005-01-01'
-tend     = '2101-12-31'
+tstart   = '1920-01-01'
+tend     = '2005-12-31'
 
 # Detrend Method
 detrend = 1 
 
 # Variables and Dataset Name
 vnames_in    = ['ts','qnet']
-dataset_name = 'rcp85'
+dataset_name = 'csiro_mk36_lens'
 ensnum       = 1
 
+lens_datasets = ['rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
+#"csiro_mk36_lens"
 #'CESM1_FULL_PIC'
 #'ncep_ncar'
 #'era20c'
+
+# Determine number of ensemble members
+if dataset_name == 'rcp85':
+    nens = 40
+elif dataset_name in ('gfdl_esm2m_lens', "csiro_mk36_lens"):
+    nens = 30
+elif dataset_name == 'canesm2_lens':
+    nens = 50
+else:
+    nens = 1
 
 # Set coordinate names for dataset
 lonname = 'lon'
@@ -91,13 +102,11 @@ ensorem  = True
 
 # Toggles
 debug    = False # Print Figures, statements for debugging
-
-
 #%% Main Body
 st_script = time.time()
 
-
-for ensnum in range(1,41):
+for ensnum in np.arange(1,nens+1):
+#for ensnum in np.arange(1,nens+1):
     
     # Part 1: Preprocess Variables (Anomalize, Detrend, Flip latitude if needed)
     
@@ -115,14 +124,18 @@ for ensnum in range(1,41):
     """
     # Set lensflag
     lensflag = False
-    if 'rcp85' in dataset_name:
+    if dataset_name in lens_datasets:
         lensflag = True
 
     for v in vnames_in:
             
         # Open the dataset, slice to time period of interest
         if lensflag:
-            da = xr.open_dataset("%sCESM1_%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
+            if dataset_name == "rcp85":
+                da = xr.open_dataset("%sCESM1_%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
+            else:
+                datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % dataset_name
+                da = xr.open_dataset("%s%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
         else:
             da = xr.open_dataset(datpath+"%s_%s.nc" % (dataset_name,v))
         
@@ -141,7 +154,10 @@ for ensnum in range(1,41):
         # For LENs case, remove ensavg
         # ----------------------------
         if lensflag:
-            eavg_fname  = "%sCESM1_rcp85_%s_ensAVG.nc" % (datpath,v)
+            if dataset_name == "rcp85":
+                eavg_fname  = "%sCESM1_rcp85_%s_ensAVG.nc" % (datpath,v)
+            else:
+                eavg_fname  = "%s%s_%s_ensAVG.nc" % (datpath,dataset_name,v)
             ensavg      = xr.open_dataset(eavg_fname)
             ensavg      = ensavg.sel(time=slice(tstart,tend),drop=True)
             ensavg      = ensavg[v].values
@@ -177,7 +193,7 @@ for ensnum in range(1,41):
                 glomean = proc.area_avg(vanom.transpose(2,1,0),[0,360,-90,90],lon,lat,1)
                 
                 # Regress back to the original data to get the global component
-                beta,b=proc.regress_2d(glomean,okdata)
+                beta,b=proc.regress_2d(glomean,okdata,nanwarn=0)
                 
                 # Subtract this from the original data
                 okdt = okdata - beta[:,None]
@@ -262,6 +278,7 @@ for ensnum in range(1,41):
         ax.set_title("EOF %i, Month %i\n Variance Explained: %.2f" % (ip+1,im+1,varexpall[im,ip]*100)+"%")
     
     # Save Output
+    proc.makedir("%senso/"% datpath) 
     savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.npz" % (datpath,dataset_name,detrend,pcrem,timestr)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
