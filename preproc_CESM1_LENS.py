@@ -10,9 +10,6 @@ This is RCP85 version (should be written to readjust this)
 - Combines Heat Fluxes
 - Prepares Ensemble Average Metric
 
-
-
-
 Based on the following scripts:
     hf1_enavgrm
 
@@ -30,9 +27,8 @@ from tqdm import tqdm
 #%% User Edits
 
 datpath = "/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/"
-outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
 
-mnum    = np.concatenate([np.arange(1,36),np.arange(101,106)])
+
 
 # Part 1 (Land/Ice Mask Creation)
 vnames  = ("LANDFRAC","ICEFRAC") # Variables
@@ -40,8 +36,16 @@ mthres  = (0.30,0.05) # Mask out if grid ever exceeds this value
 
 # Part 2 ()
 maskmode = "enssum"
+mconfig  = 'htr' # ['rcp85','htr']
 
-
+if mconfig == "rcp85":
+    outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
+    mnum    = np.concatenate([np.arange(1,36),np.arange(101,106)])
+    ntime = 1140
+elif mconfig == "htr":
+    outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/"
+    mnum    = np.concatenate([np.arange(1,36),np.arange(101,108)])
+    ntime = 1032
 #%% Functions
 
 
@@ -67,6 +71,24 @@ def load_rcp85(vname,N,datpath=None):
         ds = xr.open_dataset(fn1)
     return ds[vname]
 
+def load_htr(vname,N,datpath=None):
+    if datpath is None:
+        datpath = "/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/"
+    
+    # Append variable name to path
+    vdatpath = "%s%s/" % (datpath,vname)
+    
+    # Ensemble 1 has a different time
+    if N == 1:
+        fn = "%sb.e11.B20TRC5CNBDRD.f09_g16.%03i.cam.h0.%s.185001-200512.nc" % (vdatpath,N,vname)
+    else:
+        fn = "%sb.e11.B20TRC5CNBDRD.f09_g16.%03i.cam.h0.%s.192001-200512.nc" % (vdatpath,N,vname)
+    ds = xr.open_dataset(fn)
+    if N == 1:
+        ds = ds.sel(time=slice("1920-02-01","2006-01-01"))
+    return ds[vname]
+    
+    
 # ----------------------------
 #%% Part 1. Make Land/Ice Mask
 # ----------------------------
@@ -84,7 +106,10 @@ for e in tqdm(range(nens)):
     
         # Load dataset
         vname = vnames[v]
-        ds = load_rcp85(vname,N,datpath=datpath)
+        if mconfig =='rcp85':
+            ds = load_rcp85(vname,N,datpath=datpath)
+        elif mconfig == 'htr':
+            ds = load_htr(vname,N,datpath=datpath)
         invar = ds.values # [Time x Lat x Lon]
         
         # Mask (set 0 where it ever exceeds, propagate in time)
@@ -100,73 +125,84 @@ for e in tqdm(range(nens)):
 mask = np.array(mask)  # [ENS x LAT x LON]
 
 # Save all members
-savename = "%slandice_mask_rcp85_byens.npy" % (outpath)
+savename = "%slandice_mask_%s_byens.npy" % (outpath,mconfig)
 np.save(savename,mask)
 
 # Save ensemble sum
 mask_enssum = mask.prod(0)
-savename = "%slandice_mask_rcp85_ensavg.npy" % (outpath)
+savename = "%slandice_mask_%s_ensavg.npy" % (outpath,mconfig)
 np.save(savename,mask_enssum)
-
 
 # ------------------------------------------------------------
 #%% For each variable: Apply LI Mask, Compute Ensemble Average
 # ------------------------------------------------------------
+usemask = np.load("%slandice_mask_%s_ensavg.npy" % (outpath,mconfig)) # [Lat x Lon]
 
+vnames  = ("TS",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
 
-usemask = np.load("%slandice_mask_rcp85_ensavg.npy" % (outpath)) # [Lat x Lon]
-vnames  = ("TS","FSNS","FLNS","LHFLX","SHFLX")
-nvar    = len(vnames)
+calc_qnet = False # Set to True to compute Qnet
+
+nvar = len(vnames)
+if calc_qnet:
+    nvar    += 1
 
 for e in tqdm(range(nens)):
     
     # ********************************
     N = mnum[e]
-    ensavg = np.zeros((2,1140,192,288)) # [Var x Time x Lat x Lon]
-    qnet   = np.zeros((1140,192,288)) 
+    ensavg = np.zeros((nvar,ntime,192,288)) # [Var x Time x Lat x Lon]
+    qnet   = np.zeros((ntime,192,288)) 
     
     for v,vname in enumerate(vnames):
         
         # Load the data
-        ds    = load_rcp85(vname,N,datpath=datpath)
+        if mconfig =='rcp85':
+            ds = load_rcp85(vname,N,datpath=datpath)
+        elif mconfig == 'htr':
+            ds = load_htr(vname,N,datpath=datpath)
         
         # Apply the mask
         ds_msk = ds * usemask[None,:,:]
-        
+        if vname == "FSNS":
+            ds_msk *= -1 # Multiple to upwards positive
         
         # Just Save it
-        if vname == "TS":
+        if (vname == "TS") or (calc_qnet==False):
             
+            #print("Saving %s variable separately!" % (vname))
             # Add values for ensemble averaging
-            ensavg[0,:,:,:] += ds_msk.values
-            
+            ensavg[v,:,:,:] += ds_msk.values
+                        
             # Save the dataset
-            savename = "%sCESM1_rcp85_%s_ens%02i.nc" % (outpath,"ts",e+1)
-            ds_msk = ds_msk.rename('ts')
-            ds_msk.to_netcdf(savename,encoding={'ts': {'zlib': True}})
+            savename = "%sCESM1_%s_%s_ens%02i.nc" % (outpath,mconfig,vname,e+1)
+            ds_msk = ds_msk.rename(vname)
+            ds_msk.to_netcdf(savename,encoding={vname: {'zlib': True}})
             
         else:
-            if vname == "FSNS":
-                ds_msk *= -1 # Multiple to upwards positive
             qnet += ds_msk.values
 
+    coords  = {'time':ds_msk.time,'lat':ds_msk.lat,'lon':ds_msk.lon}
     
     # Make/save qnet
-    ensavg[1,:,:,:] += qnet.copy()
-    coords  = {'time':ds_msk.time,'lat':ds_msk.lat,'lon':ds_msk.lon}
-    da = xr.DataArray(qnet,
-                dims=coords,
-                coords=coords,
-                name = 'qnet',
-                )
-    savename = "%sCESM1_rcp85_%s_ens%02i.nc" % (outpath,"qnet",e+1)
-    da.to_netcdf(savename,
-             encoding={'qnet': {'zlib': True}})
+    if calc_qnet:
+        ensavg[-1,:,:,:] += qnet.copy()
+        
+        da = xr.DataArray(qnet,
+                    dims=coords,
+                    coords=coords,
+                    name = 'qnet',
+                    )
+        savename = "%sCESM1_%s_%s_ens%02i.nc" % (outpath,mconfig,"qnet",e+1)
+        da.to_netcdf(savename,
+                 encoding={'qnet': {'zlib': True}})
     
 # Compute and save ensemble averages
-vnames = ['ts','qnet']
+if calc_qnet:
+    vnames = ['ts','qnet']
+    #vnames.append('qnet')
+#vnames = ['ts','qnet']
     
-for v in range(2):
+for v in range(len(vnames)):
     v_ensavg = ensavg[v,:,:,:]/nens
     
     da = xr.DataArray(v_ensavg,
@@ -174,7 +210,7 @@ for v in range(2):
                 coords=coords,
                 name = vnames[v],
                 )
-    savename = "%sCESM1_rcp85_%s_ensAVG.nc" % (outpath,vnames[v])
+    savename = "%sCESM1_%s_%s_ensAVG.nc" % (outpath,mconfig,vnames[v])
     da.to_netcdf(savename,
              encoding={vnames[v]: {'zlib': True}})
 
