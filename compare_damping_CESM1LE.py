@@ -17,6 +17,7 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
+from cartopy.util import add_cyclic_point
 import cmocean
 import sys
 from tqdm.notebook import trange, tqdm
@@ -216,8 +217,7 @@ for im in tqdm(range(12)):
 
 im = 0 
 il = 0
-
-mc = 1 # 0, 1, or "diff"
+mc = "diff" # 0, 1, or "diff"
 
 if mc == "diff":
     mcstr = "HTRvRCP85"
@@ -272,4 +272,95 @@ plt.suptitle("%s Lag %i Net Heat Flux Feedback ($Wm^{-2}K^{-1}$)" % (months[im],
 plt.savefig("%sNHFLX_Damping_%s_month%02i_lag%i.png" % (figpath,mcstr,im+1,il+1),
             dpi=200,bbox_inches='tight',transparent=False)
 
-        
+
+
+# -------------------------
+# %% Ensemble Average Plots
+# -------------------------
+#%% Examine Ensemble Average (Annual Average), Global
+
+il = 0
+im = np.arange(0,12,1)
+
+bboxplot_glob = [-180,180,-65,75]
+proj = ccrs.PlateCarree(central_longitude=0)
+
+mcstrs = ["HTR","RCP85"]
+
+fig,axs = plt.subplots(3,1,figsize=(16,10),facecolor='white',constrained_layout=True,
+                       subplot_kw={'projection':proj})
+
+
+for mc in range(3):
+    
+    ax = axs.flatten()[mc]
+    
+    blabel=[1,0,0,0]
+    if mc == 2:
+        blabel[-1] = 1
+    ax = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,blabels=blabel,
+                            fill_color='k',ignore_error=True)
+    
+    if mc == 2:
+        mcstr = "HTRvRCP85"
+        cints = np.arange(-30,37.5,2.5)
+        plotvar = np.mean(dampings[1][:,il,im,:,:] - dampings[0][:-2,il,im,:,:],(0,1))
+        plotmsk = np.prod((malls[1][:,il,im,:,:] * malls[0][:-2,il,im,:,:]),(0,1))
+    else:
+        cints = np.arange(-45,47.5,2.5)
+        mcstr = mcstrs[mc]
+        plotvar = np.mean(dampings[mc][:,il,im,:,:],(0,1))
+        plotmsk = np.prod(malls[mc][:,il,im,:,:],(0,1))
+    
+    
+    plotvar,lon1 = add_cyclic_point(plotvar,coord=lon)
+    pcm = ax.contourf(lon1,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
+    
+    # Plot significant points
+    viz.plot_mask(lon,lat,plotmsk.T,reverse=True,ax=ax,markersize=.5,
+                  color='gray',proj=proj,geoaxes=True)
+    
+    if mc == 1:
+        fig.colorbar(pcm,ax=axs[:2],orientation='vertical',fraction=0.015,pad=0.01)
+    elif mc == 2:
+        fig.colorbar(pcm,ax=axs[2],orientation='vertical',fraction=0.015,pad=0.01)
+
+plt.suptitle("%s Net Heat Flux Feedback (Lag %i, $Wm^{-2}K^{-1}$)" % ("Annual Average",il+1),y=1.03,x=.67,fontsize=16)
+plt.savefig("%sNHFLX_Damping_HTRvRCP85_%s_lag%i.png" % (figpath,"AnnAvg",il+1),
+            dpi=200,bbox_inches='tight',transparent=False)
+
+#%% Look at seasonal mean differences
+
+
+hfdiffs      = dampings[1][:,il,:,:,:] - dampings[0][:-2,il,:,:,:] # [Ens x Mon x Lat x Lon]
+hfdiffs      = hfdiffs.mean(0)
+savgs,seastr = proc.calc_savg(hfdiffs,return_str=True,axis=0)
+
+#%% Make the plot
+fig,axs = plt.subplots(2,2,figsize=(16,6.5),facecolor='white',constrained_layout=True,
+                       subplot_kw={'projection':proj})
+
+for s in range(4):
+    
+    ax = axs.flatten()[s]
+    
+    blabel=[0,0,0,0]
+    if s%2 == 0:
+        blabel[0] = 1
+    if s>1:
+        blabel[-1] = 1
+    ax = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,blabels=blabel,
+                            fill_color='k',ignore_error=True)
+    
+    plotvar = savgs[s]
+    plotvar,lon1 = add_cyclic_point(plotvar,coord=lon)
+    pcm = ax.contourf(lon1,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
+    
+    # Add Subplot Labels
+    ax = viz.label_sp(seastr[s],ax=ax,labelstyle="%s",alpha=0.75,usenumber=True,fontsize=25)
+    
+fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.045,pad=0.01)
+plt.suptitle("Seasonally-Averaged Net Heat Flux Feedback Differences(Lag %i, $Wm^{-2}K^{-1}$) \n RCP85 - HTR" % (il+1),y=1.10,fontsize=16)
+plt.savefig("%sNHFLX_Damping_DIFFERENCES_SAVG_lag%i.png" % (figpath,il+1),
+            dpi=200,bbox_inches='tight',transparent=False)
+    
