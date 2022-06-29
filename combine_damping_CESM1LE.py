@@ -19,11 +19,11 @@ import time
 #%% Load in the data
 st = time.time()
 
-scenario = "rcp85" # 'rcp85' or 'htr;
+scenario = "htr" # 'rcp85' or 'htr;
 debug    = False
 vname    = "SHFLX" # [FLNS,FSNS,LHFLX,SHFLX,qnet]
 
-vnames = ("SHFLX","FSNS","FLNS")
+vnames = ("FLNS",)
 
 
 # Set the datpath depending on the scenario
@@ -48,24 +48,28 @@ namedict = {
 
 
 for vname in vnames:
+    
     damping_name = "%s_damping" % vname
-    datpath += (damping_name+"/") 
-    print("Searching for files in %s" % datpath)
+    datpath_new = "%s%s/"% (datpath,damping_name) 
+    print("Searching for files in %s" % datpath_new)
     
     #%% Load in data (repetitive because last 5 lat values are slightly different)
     
     # Get List of Nc files
-    nclist = glob.glob(datpath+"*.nc")
+    nclist = glob.glob(datpath_new+"*.nc")
     nclist.sort()
     nens   = len(nclist)
     print("Found %i files" % (nens))
+    if nens == 0:
+        print("Warning! no files found at %s. Exiting." % datpath_new)
+        sys.exit()
     if debug:
         print(*nclist,sep="\n")
     
     # Check if combined file already exists
     check_allens = ["allens" in s for s in nclist]
     if np.any(check_allens):
-        print('Warning! Already merged files. Check %s. Exiting Script.'%(datpath))
+        print('Warning! Already merged files. Check %s. Exiting Script.'%(datpath_new))
         sys.exit()
     
     lbd  = []
@@ -139,7 +143,7 @@ for vname in vnames:
     
     #% Save as netCDF
     # ---------------
-    savename = "%sCESM1_%s_%s_ensorem1_detrend1_%s_allens.nc" % (datpath,scenario,damping_name,timestr)
+    savename = "%sCESM1_%s_%s_ensorem1_detrend1_%s_allens.nc" % (datpath_new,scenario,damping_name,timestr)
     encoding_dict = {name : {'zlib': True} for name in varnames} 
     print("Saving as " + savename)
     ds.to_netcdf(savename,
