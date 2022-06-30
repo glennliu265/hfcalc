@@ -16,8 +16,6 @@ Based on the following scripts:
 @author: gliu
 """
 
-
-
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -138,11 +136,10 @@ np.save(savename,mask_enssum)
 # ------------------------------------------------------------
 usemask = np.load("%slandice_mask_%s_ensavg.npy" % (outpath,mconfig)) # [Lat x Lon]
 
-vnames  = ("TS",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
+vnames    = ("TS","FSNS","FLNS","LHFLX","SHFLX",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
+calc_qnet = True#False # Set to True to compute Qnet
+nvar      = len(vnames)
 
-calc_qnet = False # Set to True to compute Qnet
-
-nvar = len(vnames)
 if calc_qnet:
     nvar    += 1
 

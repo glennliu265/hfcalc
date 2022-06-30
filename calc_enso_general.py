@@ -60,7 +60,7 @@ tend     = '2006-01-01' # "2101-01-01"
 detrend = 1 
 
 # Variables and Dataset Name
-vnames_in    = ['TS','FLNS'] # ["qnet","fsns","flns","lhflx","shflx"]
+vnames_in    = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"]
 dataset_name = 'htr'#'rcp85'
 ensnum       = 1
 
@@ -108,7 +108,7 @@ debug    = False # Print Figures, statements for debugging
 #%% Main Body
 st_script = time.time()
 
-for ensnum in np.arange(21,nens+1):
+for ensnum in np.arange(23,nens+1):
 #for ensnum in np.arange(1,nens+1):
     
     # Part 1: Preprocess Variables (Anomalize, Detrend, Flip latitude if needed)

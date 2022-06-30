@@ -21,9 +21,9 @@ st = time.time()
 
 scenario = "htr" # 'rcp85' or 'htr;
 debug    = False
-vname    = "SHFLX" # [FLNS,FSNS,LHFLX,SHFLX,qnet]
+#vname    = "" # [FLNS,FSNS,LHFLX,SHFLX,qnet]
 
-vnames = ("FLNS",)
+vnames = ('qnet',)#("FLNS","FSNS","LHFLX","SHFLX")
 
 
 # Set the datpath depending on the scenario
