@@ -66,10 +66,18 @@ def plot_hfdamping(e,plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None):
 
 # Set the File Names
 
+use_htr_old = False # Use old HTR (not the one calculated by calc_enso_general)
+
 # Historical
-datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
-ncname    = "CESM1-LE_NHFLX_Damping_raw.nc"
-dof       = 82
+if use_htr_old:
+    datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
+    ncname    = "CESM1-LE_NHFLX_Damping_raw.nc"
+    dof       = 82
+else:
+    datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
+    ncname    = "CESM1_htr_qnet_damping_ensorem1_detrend1_1920to2005_allens.nc"
+    dof       = 82
+    
 
 # RCP85
 datpath85 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
@@ -77,7 +85,7 @@ ncname85  = "CESM1_rcp85_hfdamping_ensorem1_detrend1_2006to2101_allens.nc"
 dof85       = (2101-2006) -4 +1 
 
 # Paths, Names
-figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220609/"
+figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220629/"
 proc.makedir(figpath)
 
 # Significance Test Parameters
@@ -110,11 +118,14 @@ for mc in range(2):
 
 
     # Optionally load in the numpy arrays
-    damping = ds.nhflx_damping.values     # Damping [ens x lag x mon x lat x lon]
+    if (use_htr_old) or (mc == 1):
+        damping = ds.nhflx_damping.values     # Damping [ens x lag x mon x lat x lon]
+    else:
+        damping = ds.qnet_damping.values
     rflx    = ds.sst_flx_crosscorr.values
     rsst    = ds.sst_autocorr.values
     
-    if mc == 1: # Tranpose [ens x (mon) x (lag) x lat x lon] to [ens x lag x mon x lat x lon]
+    if damping.shape[1] == 12: # Tranpose [ens x (mon) x (lag) x lat x lon] to [ens x lag x mon x lat x lon]
         damping = damping.transpose(0,2,1,3,4)
         rflx    = rflx.transpose(0,2,1,3,4)
         rsst    = rsst.transpose(0,2,1,3,4)
@@ -124,12 +135,12 @@ for mc in range(2):
     rflxs.append(rflx)
     rssts.append(rsst)
     
-    if mc == 0:
-        lon     = ds.longitude.values
-        lat     = ds.latitude.values
+    if mc == 1:
+        lon     = ds.lon.values
+        lat     = ds.lat.values
         mon     = ds.month.values
-        ens     = ds.ensemble.values
-        lag     = ds.lag_month.values
+        ens     = ds.ens.values
+        lag     = ds.lag.values
         
         #% Make land mask
         limask = np.ones((192,288))
@@ -272,8 +283,6 @@ plt.suptitle("%s Lag %i Net Heat Flux Feedback ($Wm^{-2}K^{-1}$)" % (months[im],
 plt.savefig("%sNHFLX_Damping_%s_month%02i_lag%i.png" % (figpath,mcstr,im+1,il+1),
             dpi=200,bbox_inches='tight',transparent=False)
 
-
-
 # -------------------------
 # %% Ensemble Average Plots
 # -------------------------
@@ -282,14 +291,24 @@ plt.savefig("%sNHFLX_Damping_%s_month%02i_lag%i.png" % (figpath,mcstr,im+1,il+1)
 il = 0
 im = np.arange(0,12,1)
 
-bboxplot_glob = [-180,180,-65,75]
-proj = ccrs.PlateCarree(central_longitude=0)
+mode = "STD" # {"AVG" or "1 Standard Deviation"}
+add_clab = False
 
-mcstrs = ["HTR","RCP85"]
+if mode == "AVG":
+    titlestr = "Average"
+    cmap = 'cmo.balance'
+
+elif mode == "STD":
+    titlestr = "1$\sigma$"
+    cmap = 'inferno'
+
+
+bboxplot_glob = [-180,180,-65,75]
+proj          = ccrs.PlateCarree(central_longitude=0)
+mcstrs        = ["HTR","RCP85"]
 
 fig,axs = plt.subplots(3,1,figsize=(16,10),facecolor='white',constrained_layout=True,
                        subplot_kw={'projection':proj})
-
 
 for mc in range(3):
     
@@ -302,23 +321,43 @@ for mc in range(3):
                             fill_color='k',ignore_error=True)
     
     if mc == 2:
-        mcstr = "HTRvRCP85"
-        cints = np.arange(-30,37.5,2.5)
-        plotvar = np.mean(dampings[1][:,il,im,:,:] - dampings[0][:-2,il,im,:,:],(0,1))
+        mcstr = "RCP85 - HTR"
+        if mode == "AVG":
+            cints = np.arange(-20,21,1)
+            plotvar = np.mean(dampings[1][:,il,im,:,:] - dampings[0][:-2,il,im,:,:],(0,1))
+        elif mode == "STD":
+            cints = np.arange(-6,6.5,.5)
+            cmap = 'cmo.balance'
+            plotvar = dampings[1][:,il,im,:,:].mean(1).std(0) - dampings[0][:-2,il,im,:,:].mean(1).std(0)
         plotmsk = np.prod((malls[1][:,il,im,:,:] * malls[0][:-2,il,im,:,:]),(0,1))
+
     else:
-        cints = np.arange(-45,47.5,2.5)
         mcstr = mcstrs[mc]
-        plotvar = np.mean(dampings[mc][:,il,im,:,:],(0,1))
+        if mode == "AVG":
+            cints = np.arange(-45,47.5,2.5)
+            plotvar = np.mean(dampings[mc][:,il,im,:,:],(0,1))
+        elif mode == "STD":
+            cints = np.arange(0,12.5,0.5)
+            plotvar = dampings[mc][:,il,im,:,:].mean(1).std(0)
         plotmsk = np.prod(malls[mc][:,il,im,:,:],(0,1))
     
     
     plotvar,lon1 = add_cyclic_point(plotvar,coord=lon)
-    pcm = ax.contourf(lon1,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
+    pcm = ax.contourf(lon1,lat,plotvar,levels=cints,cmap=cmap,extend='both')
+    cl = ax.contour(lon1,lat,plotvar,levels=[0,],linecolors="k",linewidths=0.5)
+    if add_clab:
+        ax.clabel(cl)
+    
+    
+    
     
     # Plot significant points
-    viz.plot_mask(lon,lat,plotmsk.T,reverse=True,ax=ax,markersize=.5,
+    viz.plot_mask(lon,lat,plotmsk.T,reverse=True,ax=ax,markersize=.2,
                   color='gray',proj=proj,geoaxes=True)
+    
+    
+    # Add Subplot Labels
+    ax = viz.label_sp(mcstr,ax=ax,labelstyle="%s",alpha=0.75,usenumber=True,fontsize=16)
     
     if mc == 1:
         fig.colorbar(pcm,ax=axs[:2],orientation='vertical',fraction=0.015,pad=0.01)
@@ -326,7 +365,7 @@ for mc in range(3):
         fig.colorbar(pcm,ax=axs[2],orientation='vertical',fraction=0.015,pad=0.01)
 
 plt.suptitle("%s Net Heat Flux Feedback (Lag %i, $Wm^{-2}K^{-1}$)" % ("Annual Average",il+1),y=1.03,x=.67,fontsize=16)
-plt.savefig("%sNHFLX_Damping_HTRvRCP85_%s_lag%i.png" % (figpath,"AnnAvg",il+1),
+plt.savefig("%sNHFLX_Damping_HTRvRCP85_%s_%s_lag%i.png" % (figpath,mode,"AnnAvg",il+1),
             dpi=200,bbox_inches='tight',transparent=False)
 
 #%% Look at seasonal mean differences
@@ -337,8 +376,10 @@ hfdiffs      = hfdiffs.mean(0)
 savgs,seastr = proc.calc_savg(hfdiffs,return_str=True,axis=0)
 
 #%% Make the plot
+cints = np.arange(-20,21,1)
 fig,axs = plt.subplots(2,2,figsize=(16,6.5),facecolor='white',constrained_layout=True,
                        subplot_kw={'projection':proj})
+
 
 for s in range(4):
     
@@ -355,6 +396,8 @@ for s in range(4):
     plotvar = savgs[s]
     plotvar,lon1 = add_cyclic_point(plotvar,coord=lon)
     pcm = ax.contourf(lon1,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
+    cl = ax.contour(lon1,lat,plotvar,levels=[0,],linecolors="k",linewidths=0.5)
+    #ax.clabel(cl,inline_spacing=5)
     
     # Add Subplot Labels
     ax = viz.label_sp(seastr[s],ax=ax,labelstyle="%s",alpha=0.75,usenumber=True,fontsize=25)
