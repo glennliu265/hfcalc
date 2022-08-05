@@ -22,10 +22,11 @@ sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/
 from amv import proc
 
 #%% User Edits
+mconfig = "SLAB"
 
 # Paths to use
-datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/02_ENSOREM/FULL/" # Output Path
-outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/03_HFCALC/FULL/" # Output Path
+datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/02_ENSOREM/%s/" % mconfig # Output Path
+outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/03_HFCALC/%s/" % mconfig  # Output Path
 
 #%% Functions
 
@@ -156,7 +157,7 @@ def indexwindow(invar,m,monwin,combinetime=False,verbose=False):
 #%% User inputs
 
 # ENSO Removal Options
-ensorem = 1 # Set to 1 if ENSO was removed
+ensorem = False # Set to True if ENSO was removed
 ensolag = 1 # Lag between enso removal and variable
 pcrem   = 2 # PCs of enso removed
 emonwin = 3 # Month window of ENSO Removal
@@ -168,14 +169,21 @@ flux   = 'NHFLX'
 
 
 #%%
+
 # Set File Names
-ensoexp = "lag%i_pcs%i_monwin%i" % (ensolag,pcrem,emonwin)
-filepath = datpath+"ENSOREM_%s_"+ensoexp + ".npz"
+if ensorem:
+    ensoexp = "lag%i_pcs%i_monwin%i" % (ensolag,pcrem,emonwin)
+    filepath = datpath+"ENSOREM_%s_"+ensoexp + ".npz"
+else:
+    filepath = datpath+"ENSOREM0_%s_lag"+str(ensolag)+".npz"
 
 
 # Load the files #[time x lat x lon]
 st = time.time()
-sst = np.load("%sENSOREM_TS_%s.npz"%(datpath,ensoexp),allow_pickle=True)['TS']
+if ensorem:
+    sst = np.load("%sENSOREM_TS_%s.npz"%(datpath,ensoexp),allow_pickle=True)['TS']
+else:
+    sst = np.load("%sENSOREM0_TS_lag%s.npz"%(datpath,ensolag),allow_pickle=True)['TS']
 flx = combineflux(flux,filepath,verbose=True)
 print("Data loaded in %.2fs"%(time.time()-st))
 
