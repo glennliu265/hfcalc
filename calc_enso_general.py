@@ -26,7 +26,7 @@ import cartopy.crs as ccrs
 import glob
 
 #%% Import modules
-stormtrack = 1
+stormtrack = 0
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -49,20 +49,28 @@ proc.makedir(figpath)
 
 # Part 1 (Preprocessing) ------------------------------------------
 
-overwrite = False # Skip the file if it already exists
+overwrite         = False # Skip the file if it already exists
 
-# Select time crop
-croptime = True
-tstart   = '1920-01-01' # "2006-01-01"
-tend     = '2006-01-01' # "2101-01-01"
+# Select time crop (prior to preprocessing)
+croptime          = True # Cut the time prior to detrending, EOF, etc
+tstart            = '1920-01-01' # "2006-01-01"
+tend              = '2006-01-01' # "2101-01-01"
+
+# Select time crop (for the estimate)
+croptime_estimate = True # Cut time right before estimating the heat flux feedback
+tcrop_start       = '1920-01-01'
+tcrop_end         = '1970-01-01'
+tcrop_fname       = ""
+if croptime_estimate:
+    tcrop_fname      = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
 
 # Detrend Method
-detrend = 1 
+detrend      = 1 
 
 # Variables and Dataset Name
-vnames_in    = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"]
-dataset_name = 'htr'#'rcp85'
-ensnum       = 1
+vnames_in     = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"]
+dataset_name  = 'htr'#'rcp85'
+ensnum        = 1
 
 lens_datasets = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
 #"csiro_mk36_lens"
@@ -106,9 +114,10 @@ ensorem  = True
 # Toggles
 debug    = False # Print Figures, statements for debugging
 #%% Main Body
+
 st_script = time.time()
 
-for ensnum in np.arange(23,nens+1):
+for ensnum in np.arange(1,nens+1):
 #for ensnum in np.arange(1,nens+1):
     
     # Part 1: Preprocess Variables (Anomalize, Detrend, Flip latitude if needed)
@@ -398,6 +407,10 @@ for ensnum in np.arange(23,nens+1):
         lat = ds.lat.values
         lon = ds.lon.values
         
+        # Crop time if option is set
+        if croptime_estimate:
+            ds = ds.sel(time=slice(tcrop_start,tcrop_end),drop=True)
+        
         loadvar = ds[v].values
         ntime,nlat,nlon = loadvar.shape
         loadvar = loadvar.reshape(int(ntime/12),12,nlat,nlon)
@@ -407,13 +420,13 @@ for ensnum in np.arange(23,nens+1):
     #% Calculate heat flux
     sst,flx = invars
     damping,autocorr,crosscorr,autocov,cov = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=True,return_cov=True)
-
+    
     # Save heat flux (from hfdamping_mat2nc.py)
     # ----------------------------------------
     outvars  = [damping,crosscorr,autocorr,cov,autocov]
     datpath_out = "%s%s_damping/" % (datpath,v)
     proc.makedir(datpath_out)
-    savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s.nc" % (datpath_out,dataset_name,ensorem,detrend,timestr)
+    savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s_%scrop.nc" % (datpath_out,dataset_name,ensorem,detrend,timestr,tcrop_fname)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
     dims     = {'month':np.arange(1,13,1),
