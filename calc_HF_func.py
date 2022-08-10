@@ -25,6 +25,8 @@ import sys
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 
+import matplotlib.path as mpath
+
 #%% Set working location
 stormtrack = 0
 
@@ -38,14 +40,14 @@ elif stormtrack == 0:
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
     
     datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
-    outpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20211021/"
+    outpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220810/"
 
     lipath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
     llpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
-
+    
 from amv import proc,viz
 import scm
-
+proc.makedir(outpath)
 #mconfig = "SLAB_FULL"
 #datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/02_ENSOREM/%s/" % mconfig
 #outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/03_HFCALC/%s/"  % mconfig
@@ -53,24 +55,40 @@ import scm
 
 tails      = 2
 p          = 0.05
-mode       = 4 # 1 = No Mask; 2 = SST autocorr; 3 --> SST-FLX cross corr; 4 = Both
+mode       = 5 # 1 = No Mask; 2 = SST autocorr; 3 --> SST-FLX cross corr; 4 = Both, 5 = Replace SLAB
 sellags    = [0]
 maskval    = 0 # Set the masking value
 saveoutput = True
+savenetcdf = True
+
+ensorem    = 0
 
 lagstr = "lag"
 for i in sellags:
     lagstr += str(sellags[i]+1)
 mons3       = ('Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec')
 bboxplot = [-100,20,0,80]
+
+mconfigs =["PIC-SLAB","PIC-FULL"]
+dofs     =[898 - 1 - 2 - 2, 1898 - 1 - 2 - 2] 
+
 #%% Quick fill-in functions
 
-def load_dampraw(mconfig,datpath):
-    inpaths = datpath+"CESM-"+mconfig+"-Damping/"
-    damping = np.load(inpaths+"NHFLX_Damping_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
-    rflx    = np.load(inpaths+"NHFLX_Crosscorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
-    rsst    = np.load(inpaths+"SST_Autocorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+def load_dampraw(mconfig,datpath,ensorem=1):
+    """Loads files computed by calc_HF.py"""
+    if ensorem == 1:
+        inpaths = datpath+"CESM-"+mconfig+"-Damping/"
+        damping = np.load(inpaths+"NHFLX_Damping_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+        rflx    = np.load(inpaths+"NHFLX_Crosscorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+        rsst    = np.load(inpaths+"SST_Autocorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+    else:
+        inpaths = datpath+"CESM-"+mconfig+"-Damping_ENSOREM0/"
+        damping = np.load(inpaths+"NHFLX_Damping_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+        rflx    = np.load(inpaths+"NHFLX_Crosscorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
+        rsst    = np.load(inpaths+"SST_Autocorrelation_monwin3_lags123_ensorem1_lag1_pcs2_monwin3.npz.npy")
     return damping,rsst,rflx
+
+
 
 
 #%% Test the prep_HF script
@@ -83,8 +101,7 @@ if stormtrack == 0:
     lon180,_ = scm.load_latlon(datpath=llpath)
     limask = np.load(lipath+"../landicemask_enssum.npy")
 
-mconfigs =["PIC-SLAB","PIC-FULL"]
-dofs     =[898 - 1 - 2 - 2, 1898 - 1 - 2 - 2] 
+
 
 dampings   = []
 rssts      = []
@@ -131,6 +148,10 @@ for i,mcf in enumerate(mconfigs):
     malls.append(mall)
     
 
+
+
+
+
 #%% For Mode 5, replace insignificant values in FULL with those from SLAB
 debug = False
 
@@ -157,28 +178,176 @@ if mode == 5:
 #%% Save the Output
 # -----------------
 if saveoutput:
+    
     # Save Full PIC
-    picout = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
-    outname = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s.npy" % (picout,dofs[1],mode,lagstr)
-    np.save(outname,dampingfin[1])
-    print("Saved to "+outname)
+    if ensorem:
+        picout = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
+        outname = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s.npy" % (picout,dofs[1],mode,lagstr)
+        np.save(outname,dampingfin[1])
+        print("Saved to "+outname)
     
-    # Save SLAB PIC
-    outname = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s.npy" % (picout,dofs[0],mode,lagstr)
-    np.save(outname,dampingfin[0])
-    print("Saved to "+outname)
-    
-    # Save the masks as well
-    outname1 = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s.npy" % (picout,dofs[0],mode,lagstr)
-    outname0 = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s.npy" % (picout,dofs[1],mode,lagstr)
-    outnames = [outname1,outname0]
-    for i in range(2):
-        np.save(outnames[i],malls[i])
-        print("Saved to "+outnames[i])
+        # Save SLAB PIC
+        outname = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s.npy" % (picout,dofs[0],mode,lagstr)
+        np.save(outname,dampingfin[0])
+        print("Saved to "+outname)
         
+        # Save the masks as well
+        outname1 = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s.npy" % (picout,dofs[0],mode,lagstr)
+        outname0 = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s.npy" % (picout,dofs[1],mode,lagstr)
+        outnames = [outname1,outname0]
+        for i in range(2):
+            np.save(outnames[i],malls[i])
+            print("Saved to "+outnames[i])
+    else:
+        picout = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
+        outname = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s_ensorem0.npy" % (picout,dofs[1],mode,lagstr)
+        np.save(outname,dampingfin[1])
+        print("Saved to "+outname)
+    
+        # Save SLAB PIC
+        outname = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_%s_ensorem0.npy" % (picout,dofs[0],mode,lagstr)
+        np.save(outname,dampingfin[0])
+        print("Saved to "+outname)
+        
+        # Save the masks as well
+        outname1 = "%sSLAB_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s_ensorem0.npy" % (picout,dofs[0],mode,lagstr)
+        outname0 = "%sFULL_PIC_NHFLX_Damping_monwin3_sig005_dof%i_mode%i_mask_%s_ensorem0.npy" % (picout,dofs[1],mode,lagstr)
+        outnames = [outname1,outname0]
+        for i in range(2):
+            np.save(outnames[i],malls[i])
+            print("Saved to "+outnames[i])
+
+# ---------------------------------------
+#%% Save as netCDF (to share with others)
+# ---------------------------------------
+
+for i,mcf in enumerate(mconfigs):
+    
+    # Load Data
+    loaded_data = load_dampraw(mcf,datpath)
+    
+    # lat/lon
+    lon,lat  = scm.load_latlon(datpath=llpath,lon360=True)
+    lon180,_ = scm.load_latlon(datpath=llpath)
+    
+    # Load limask
+    datpath2 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/"
+    limask   = np.load("%sCESM-%s_landicemask360.npy" % (datpath2,mcf[-4:])) 
+    _,limask = proc.lon360to180(lon,limask.transpose(1,0)[:,:,None])
+    limask = limask.transpose(2,1,0)
+    
+    # Flip longitude, Average over selected Lag
+    flipped_data = []
+    for v in loaded_data:
+        v = v[:,sellags,:,:].mean(1) # [mon x lag x lat x lon]
+        v = v.transpose(2,1,0) # [lon x lat x mon]
+        _,vflip = proc.lon360to180(lon,v)
+        flipped_data.append(vflip.transpose(2,1,0)) # [mon x lat x lon]
+    lbd_a,rsst,rflx = flipped_data
+    
+    # Check sign
+    if np.nansum(np.sign(rflx)) < 0:
+        print("WARNING! sst-flx correlation is mostly negative, sign will be flipped")
+        rflx*=-1
+        lbd_a *= -1
+    
+    # Save Data (adapted from hfdamping_mat2nc.py)
+    # Make dimensions for data array
+    outvars = [lbd_a,rflx,rsst,limask.squeeze()]
+    months  = np.arange(1,13,1)
+    dims = {
+            'month'      : months,
+            'latitude'   : lat,
+            'longitude'  : lon180
+            }
+    limask_dims = {'latitude'   : lat,
+                   'longitude'  : lon180
+                  }
     
     
+    # Set some attributes
+    varnames = ("nhflx_damping",
+                "sst_flx_crosscorr",
+                "sst_autocorr",
+                "land_ice_mask")
+    varlnames = ("Net Heat Flux Damping",
+                 "SST-Heat Flux Cross Correlation",
+                 "SST Autocorrelation",
+                 "Land-Ice Mask")
+    units     = ("W/m2/degC",
+                 "Correlation",
+                 "Correlation",
+                 "None")
     
+    # Convert from ndarray to data array
+    # ----------------------------------
+    das = []
+    for v,name in enumerate(varnames):
+        attr_dict = {'long_name':varlnames[v],
+                     'units':units[v]}
+        if v <3:
+            dims_in = dims
+        else:
+            dims_in = limask_dims
+        da = xr.DataArray(outvars[v],
+                    dims=dims_in,
+                    coords=dims_in,
+                    name = name,
+                    attrs=attr_dict
+                    )
+        if v == 0:
+            ds = da.to_dataset() # Convert to dataset
+        else:
+            ds = ds.merge(da) # Merge other datasets
+            
+        # Append to list if I want to save separate dataarrays
+        das.append(ds)
+    
+    #% Save as netCDF
+    # ---------------
+    st = time.time()
+    encoding_dict = {name : {'zlib': True} for name in varnames} 
+    savename = "%sCESM1_%s_NHFLX_Damping_lag%i.nc" % (datpath,mcf,sellags[0]+1)
+    print("Saving as " + savename)
+    ds.to_netcdf(savename,
+             encoding=encoding_dict)
+    print("Saved in %.2fs" % (time.time()-st))
+    
+    
+    # Try to reproduce Plot
+    proj = ccrs.LambertConformal(central_longitude = -42,central_latitude=45)
+    fig,ax = plt.subplots(1,1,subplot_kw={'projection':proj},figsize=(12,5))
+    ax.coastlines()
+    
+    # Lon and Lat Boundaries
+    xlim = [-84, 0]
+    ylim = [19, 70]
+    lower_space = 15 # this needs to be manually increased if the lower arched is cut off by changing lon and lat lims
+    
+    rect = mpath.Path([[xlim[0], ylim[0]],
+                   [xlim[1], ylim[0]],
+                   [xlim[1], ylim[1]],
+                   [xlim[0], ylim[1]],
+                   [xlim[0], ylim[0]],
+                   ]).interpolated(20)
+
+    proj_to_data = ccrs.PlateCarree()._as_mpl_transform(ax) - ax.transData
+    rect_in_target = proj_to_data.transform_path(rect)
+    ax.set_boundary(rect_in_target)
+    ax.set_extent([xlim[0], xlim[1], ylim[0] - lower_space, ylim[1]])
+    
+    pcm = ax.pcolormesh(lon180,lat,lbd_a.mean(0)*limask.squeeze(),
+                        vmin=0,vmax=50,cmap='viridis',
+                        transform=ccrs.PlateCarree())
+    gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False,)
+    gl.right_labels=False
+    gl.top_labels=False
+    fig.colorbar(pcm,ax=ax,fraction=0.025,pad=0.01)
+    ax.set_title(r"Annual Mean $\alpha$ for SST (CESM %s)" % mcf)
+    plt.savefig("%sAnnualMeanAlpha_SST_CESM%s.png" % (outpath,mcf),dpi=150,bbox_inches='tight')
+    
+
+
 #%% Select point for comparison
 # -----------------------------
 lonf = -30
