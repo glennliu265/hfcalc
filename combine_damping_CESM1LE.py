@@ -19,21 +19,29 @@ import time
 #%% Load in the data
 st = time.time()
 
+# Set Information
 scenario = "htr" # 'rcp85' or 'htr;
 debug    = False
-#vname    = "" # [FLNS,FSNS,LHFLX,SHFLX,qnet]
+#vname   = "" # [FLNS,FSNS,LHFLX,SHFLX,qnet]
+vnames   = ('LHFLX',)#("FLNS","FSNS","LHFLX","SHFLX")
+expname  = '30y_70to00'# Name for HFF estimate[None,30y_70to00,50y_firstlast]
 
-vnames = ('qnet',)#("FLNS","FSNS","LHFLX","SHFLX")
-
-
-# Set the datpath depending on the scenario
-if scenario == "rcp85":
-    timestr = "2006to2100"
-    datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
-elif scenario == "htr":
-    timestr = "1920to2005"
-    datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/"
-
+if expname is None: # HFF Estimated from Full Data
+    # Set the datpath depending on the scenario
+    if scenario == "rcp85":
+        timestr = "2006to2100"
+        datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
+    elif scenario == "htr":
+        timestr = "1920to2005"
+        datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/"
+elif expname is "30y_70to00":
+    if scenario == 'rcp85':
+        #timestr_original = "2006to2101__20700101to20991231crop"
+        timestr = "2070to2100"
+    elif scenario == 'htr':
+        #timestr_original = "1920to2006__19700101to19991231crop"
+        timestr = "1970to2000"
+    datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/30y_70to00/"
 
 namedict = {
     "LHFLX": "Latent Heat Flux",
@@ -45,12 +53,13 @@ namedict = {
     "RHFLX": "Radiative Heat Flux",
     "THFLX": "Turbulent Heat Flux"
     }
-
-
-for vname in vnames:
     
+for vname in vnames:
     damping_name = "%s_damping" % vname
-    datpath_new = "%s%s/"% (datpath,damping_name) 
+    if expname is None:
+        datpath_new = "%s%s/"% (datpath,damping_name) 
+    else: #ex: ... /LHFLX_damping/rcp85/
+        datpath_new = "%s%s/%s/"% (datpath,damping_name,scenario) 
     print("Searching for files in %s" % datpath_new)
     
     #%% Load in data (repetitive because last 5 lat values are slightly different)

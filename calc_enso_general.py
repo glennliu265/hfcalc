@@ -26,7 +26,7 @@ import cartopy.crs as ccrs
 import glob
 
 #%% Import modules
-stormtrack = 0
+stormtrack = 1
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -48,31 +48,30 @@ import scm
 proc.makedir(figpath)
 
 # Part 1 (Preprocessing) ------------------------------------------
-
 overwrite         = False # Skip the file if it already exists
 
 # Select time crop (prior to preprocessing)
 croptime          = True # Cut the time prior to detrending, EOF, etc
-tstart            = '1920-01-01' # "2006-01-01"
-tend              = '2006-01-01' # "2101-01-01"
+tstart            =  "2006-01-01" # '1920-01-01'
+tend              =  "2101-01-01" # '2006-01-01'
 
 # Select time crop (for the estimate)
 croptime_estimate = True # Cut time right before estimating the heat flux feedback
-tcrop_start       = '1920-01-01'
-tcrop_end         = '1970-01-01'
+tcrop_start       = '2070-01-01'#"1970-01-01"#'1920-01-01'
+tcrop_end         = '2099-12-31'#"1999-12-31"#'1970-01-01'
 tcrop_fname       = ""
 if croptime_estimate:
     tcrop_fname      = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
 
 # Detrend Method
-detrend      = 1 
+detrend           = 1 
 
 # Variables and Dataset Name
-vnames_in     = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"]
-dataset_name  = 'htr'#'rcp85'
-ensnum        = 1
+vnames_in         = ['ts','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+dataset_name      = 'rcp85'#'rcp85'
+ensnum            = 1
 
-lens_datasets = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
+lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
 #"csiro_mk36_lens"
 #'CESM1_FULL_PIC'
 #'ncep_ncar'
@@ -91,9 +90,9 @@ else:
     nens = 1
 
 # Set coordinate names for dataset
-lonname = 'lon'
-latname = 'lat'
-tname   = 'time'
+lonname  = 'lon'
+latname  = 'lat'
+tname    = 'time'
 
 # Part 2 (ENSO Index Calculation) ---------------------------------
 
@@ -102,7 +101,6 @@ pcrem    = 3                   # PCs to calculate
 bbox     = [120, 290, -20, 20] # ENSO Bounding Box
 
 # Part 3 (ENSO Removal) -------------------------------------------
-
 ensolag  = 1    # Lag between ENSO month and response month in NATL
 reduceyr = True # Drop years due to ENSO lag
 monwin   = 3    # Window of months to consider
@@ -113,6 +111,7 @@ ensorem  = True
 
 # Toggles
 debug    = False # Print Figures, statements for debugging
+
 #%% Main Body
 
 st_script = time.time()
@@ -325,7 +324,6 @@ for ensnum in np.arange(1,nens+1):
         
     #%% Part 3: Calculate the ENSO Component, and remove it.
     # (based on remove_ENSO_PIC.py)
-    
     
     # ------------------- -------- General Portion --------------------------------
     """

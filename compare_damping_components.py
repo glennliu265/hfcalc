@@ -37,21 +37,31 @@ importlib.reload(viz)
 #%%
 
 # Variables 
-vnames    = ("FLNS","FSNS","LHFLX","SHFLX")
+vnames    = ("LHFLX",)#("FLNS","FSNS","LHFLX","SHFLX")
 scenarios = ("htr","rcp85")
-dofs      = (2005-1920+1,2100-2006+1)
+expname   = "30y_70to00" # (None,30y_70to00,)
 
+if expname is None:
+    dofs = (2005-1920+1,2100-2006+1)
+    datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
+    ncstrs    = (None,None)
+elif expname is "30y_70to00":
+    dofs      = (30,30)
+    datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
+    ncstrs    = ('CESM1_htr_LHFLX_damping_ensorem1_detrend1_1970to2000_allens.nc',
+                 'CESM1_rcp85_LHFLX_damping_ensorem1_detrend1_2070to2100_allens.nc')
+    
 # Significance Test Parameters
-p        = 0.20     # p-value
-tails    = 2        # two-tailed or one-tailed test...
+p         = 0.20     # p-value
+tails     = 2        # two-tailed or one-tailed test...
 
 # Add paths to the files
-datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
-figpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220629/"
+
+figpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220815/"
 proc.makedir(figpath)
 #%% Merge and Begin
 
-def load_damping(vname,scenario,datpath=None):
+def load_damping(vname,scenario,datpath=None,ncstr=None):
     
     """Loads data which has been processed by calc_enso_general.py
     and combine_damping_CESM1LE.py
@@ -61,11 +71,18 @@ def load_damping(vname,scenario,datpath=None):
     # Set Datapath and NetCDF Name
     if datpath is None:
         datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
+    
     if scenario == "rcp85":
-        ncname = "%sCESM1_rcp85_%s_damping_ensorem1_detrend1_2006to2100_allens.nc" % (datpath,vname)
+        if ncstr is None:
+            ncname = "%sCESM1_rcp85_%s_damping_ensorem1_detrend1_2006to2100_allens.nc" % (datpath,vname)
+        else:
+            ncname = "%s%s" % (datpath,ncstr)
     elif scenario == "htr":
-        ncname = "%sCESM1_htr_%s_damping_ensorem1_detrend1_1920to2005_allens.nc" % (datpath,vname)
-        
+        if ncstr is None:
+            ncname = "%sCESM1_htr_%s_damping_ensorem1_detrend1_1920to2005_allens.nc" % (datpath,vname)
+        else:
+            ncname = "%s%s" % (datpath,ncstr)
+    
     # Open dataset
     ds           = xr.open_dataset(ncname)
     damping_name = "%s_damping" % vname
@@ -102,8 +119,7 @@ def make_damping_mask(rflx,rsst,dof,p=0.05,tails=1):
     
     return outvars
     
-    
-#%% 
+#%% Read in the dampings
 
 vdampings  = {}
 ccs        = {}
@@ -126,8 +142,11 @@ for vname in tqdm(vnames):
     rhoall  = []
     
     for mc in range(2):
+        
+        
         scenario = scenarios[mc]
-        outvars = load_damping(vname,scenario,datpath=datpath)
+        datpath_in = "%s%s/%s_damping/%s/" % (datpath,expname,vname,scenario)
+        outvars  = load_damping(vname,scenario,datpath=datpath_in,ncstr=ncstrs[mc])
         
         dampings.append(outvars[0])
         rflxs.append(outvars[1])
@@ -166,7 +185,7 @@ ilag = 0
 nens,nmon,nlag,nlat,nlon = vdampings[vname][0].shape
 vensavg = np.zeros((4,2,nlat,nlon)) * np.nan
 vensstd = np.zeros((4,2,nlat,nlon)) * np.nan
-for v in range(4):
+for v in range(len(vnames)):
     vname = vnames[v]
     for mc in range(2):
         vensavg[v,mc,:,:] = np.mean(vdampings[vname][mc][:,imon,ilag,:,:],(0,1))
@@ -179,15 +198,14 @@ proj          = ccrs.PlateCarree(central_longitude=0)
 bboxplot_glob = [-180,180,-65,75]
 vmaxmin       = 30
 use_contour   = True
-add_clab    = False
+add_clab      = False
+cints         = np.arange(-20,21,1)
 
-cints = np.arange(-20,21,1)
-
-fig,ax = plt.subplots(1,1,figsize=(12,4),facecolor='white',constrained_layout=True,
+fig,ax        = plt.subplots(1,1,figsize=(12,4),facecolor='white',constrained_layout=True,
                        subplot_kw={'projection':proj})
-ax = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,
+ax            = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,
                         fill_color='k',ignore_error=True)
-plotvar = (vensavg[:,1,:,:] - vensavg[:,0,:,:]).sum(0)
+plotvar       = (vensavg[:,1,:,:] - vensavg[:,0,:,:]).sum(0)
 
 if use_contour:
     pcm = ax.contourf(lon,lat,plotvar,levels=cints,cmap='cmo.balance')
@@ -213,7 +231,7 @@ use_contour    = True
 # 4 - Spatially Scaled Difference ((RCP85-HTR)/HTR)
 viz_mode = 3
 
-for v in range(4):
+for v in range(len(vnames)):
     ax = axs.flatten()[v]
     
     blabel=[0,0,0,0]
@@ -371,6 +389,109 @@ for mc in range(3):
 plt.suptitle("%s %s Feedback (Lag %i, $Wm^{-2}K^{-1}$)" % ("Annual Average",vname,il+1),y=1.03,x=.67,fontsize=16)
 plt.savefig("%s%s_Damping_HTRvRCP85_%s_%s_lag%i.png" % (figpath,vname,mode,"AnnAvg",il+1),
             dpi=200,bbox_inches='tight',transparent=False)
+
+#%% Visualize the difference for one component
+
+v = 0
+vmaxmin       = 30
+cints         = np.arange(-20,22,2)
+cmap          = 'cmo.balance'
+
+fig,ax        = plt.subplots(1,1,figsize=(12,6.5),facecolor='white',
+                             subplot_kw={'projection':proj})
+ax            = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,
+                        fill_color='k',ignore_error=True)
+plotvar       = (vensavg[v,1,:,:] - vensavg[v,0,:,:])
+
+
+plotvar,lon1  = add_cyclic_point(plotvar,coord=lon)
+pcm           = ax.contourf(lon1,lat,plotvar,levels=cints,cmap=cmap,extend='both')
+cl            = ax.contour(lon1,lat,plotvar,levels=cints,colors='k',linewidths=0.5)
+ax.clabel(cl,levels=cints[::2])
+
+ax            = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,fill_color='k',ignore_error=True)
+
+ax.set_title("%s Feedback Differences (RCP8.5 - Historical; Lag 1, Ens and Ann. Avg)"% vnames[v])
+cb            = fig.colorbar(pcm,ax=ax,fraction=0.018)
+cb.set_label("%s Difference (%s) " % ("%s Feedback Difference" % vnames[v],"$W m^{-2}$"))
+
+plt.savefig("%sCESM1LE_HFFDifferences_%s_AnnAvg.png"% (figpath,vnames[v]),
+            dpi=200,bbox_inches='tight',transparent=False)
+
+
+
+
+    
+
+#%% Visualize zonal averages of the difference
+
+ytzonal = np.arange(-60,75,15)
+plotvar       = np.nanmean((vensavg[v,1,:,:] - vensavg[v,0,:,:]),1)
+
+fig,ax=plt.subplots(1,1,figsize=(4,8))
+
+ax.plot(plotvar,lat)
+ax.grid(True,ls='dotted')
+
+
+ax.axvline(0,ls='dashed',color="k",lw=0.75)
+ax.set_xlim([-3,3])
+ax.set_ylim([-62,62])
+ax.set_yticks(ytzonal)
+ax.set_title("Zonal Mean %s Feedback Difference \n RCP8.5 - Historical" % (vnames[v]))
+ax.set_ylabel("Latitude")
+ax.set_xlabel("Difference in %s Feedback ($Wm^{-2}\degree C^{-1}$)" % (vnames[v]))
+
+# -----------------------------------------
+#%% Align zonal mean plot with Cartopy Plot
+# -----------------------------------------
+
+fig = plt.figure(figsize=(16,14))
+# gs = fig.add_gridspec(2, 2,  width_ratios=(7, 2), height_ratios=(16, 8),
+#                       left=0.05, right=0.95, bottom=0.05, top=0.95,
+#                       wspace=0.05, hspace=0.05)
+
+gs = fig.add_gridspec(2, 2,  width_ratios=(8, 1), height_ratios=(18, 8),
+                      left=0.05, right=0.95, bottom=0.05, top=0.95,
+                      wspace=0.05, hspace=0.05)
+
+# Map
+ax = fig.add_subplot(gs[1, 0],projection=proj)
+
+plotvar       = (vensavg[v,1,:,:] - vensavg[v,0,:,:])
+plotvar,lon1  = add_cyclic_point(plotvar,coord=lon)
+pcm           = ax.contourf(lon1,lat,plotvar,levels=cints,cmap=cmap,extend='both')
+cl            = ax.contour(lon1,lat,plotvar,levels=cints,colors='k',linewidths=0.5)
+ax.clabel(cl,levels=cints[::2])
+
+ax            = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,fill_color='k',ignore_error=True)
+
+ax.set_title("%s Feedback Differences (RCP8.5 - Historical; Lag 1, Ens and Ann. Avg)"% vnames[v])
+#cb            = fig.colorbar(pcm,ax=ax,fraction=0.018,orientation='vertical')
+#cb.set_label("%s Difference (%s) " % ("%s Feedback Difference" % vnames[v],"$W m^{-2}$"))
+
+
+# Zonal Mean
+ax_zonalmean = fig.add_subplot(gs[1, 1], sharey=ax)
+
+ax = ax_zonalmean
+ytzonal = np.arange(-60,80,20)
+plotvar       = np.nanmean((vensavg[v,1,:,:] - vensavg[v,0,:,:]),1)
+
+ax.plot(plotvar,lat)
+ax.grid(True,ls='dotted')
+ax.axvline(0,ls='dashed',color="k",lw=0.75)
+ax.set_xlim([-3,3])
+ax.set_ylim([-62,62])
+ax.set_yticks(ytzonal)
+ax.set_title("Zonal Mean Diff.")
+#ax.set_ylabel("Latitude")
+ax.set_xlabel("Zonal Mean Diff. ($Wm^{-2}\degree C^{-1}$)")
+
+plt.savefig("%sCESM1LE_HFFDifferences_%s_AnnAvg_wZonalMean.png"% (figpath,vnames[v]),
+            dpi=200,bbox_inches='tight',transparent=False)
+
+#plt.show()
 
 #%% Plot BSF
 
