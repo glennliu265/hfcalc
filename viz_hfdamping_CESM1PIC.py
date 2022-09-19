@@ -40,16 +40,18 @@ import copy
 datpath     = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
 lipath      = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
 llpath      = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/01_Data/model_input/"
-figpath     = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220415/'
+figpath     = '/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/02_Figures/20220824/'
 proc.makedir(figpath)
 
 mconfigs    = ["PIC-SLAB","PIC-FULL"]
 dofs        = [898 - 1 - 2 - 2, 1898 - 1 - 2 - 2] 
 
 lags        = [1,2,3]
-bboxplot    =  [-80,0,5,60]
+bboxplot    =  [-80,0,5,62]
 mons3       = [viz.return_mon_label(m,nletters=3) for m in np.arange(1,13)]
 
+
+pubready    = True
 #%% Functions
 
 def load_dampraw(mconfig,datpath):
@@ -194,7 +196,7 @@ fig.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.036,pad=.05)
 ax.set_title("%s (%s) \n %s; Lag %i " % (masktype_fancy[imsk],mconfigs[plotmcf],mons3[plotmon],lags[plotlag]))
 
 #%% Seasonal Plot of Correlation
-plotlag  = 1
+plotlag  = 0
 plotmcf  = 0
 imsk     = 0
 
@@ -202,7 +204,10 @@ outstr     = "lag%s_%s" % (lags[plotlag],mconfigs[plotmcf])
 titlestr   = "%s (%s ,Lag: %i)" % (masktype_fancy[imsk],mconfigs[plotmcf],lags[plotlag])
 
 
-cints_corr = np.arange(-1,1.1,.1)
+if imsk == 0:
+    cints_corr = np.arange(0,1.05,.05)
+else:
+    cints_corr = np.arange(-1,1.1,.1)
 
 loopmon = np.concatenate([[11,],np.arange(0,11,1)])
 fig,axs = plt.subplots(4,3,figsize=(16,16),facecolor='white',constrained_layout=True,
@@ -225,8 +230,8 @@ for i in tqdm(range(12)):
     ax.set_title(mons3[im])
     
     # Get plotting variable
-    plotvar  =  rhovalues[imsk][plotmcf][plotlag,plotmon,:,:]
-    plotmsk  =  rmasks[plotmon,plotlag,:,:,plotmcf,imsk]
+    plotvar  =  rhovalues[imsk][plotmcf][im,plotlag,:,:]
+    plotmsk  =  rmasks[im,plotlag,:,:,plotmcf,imsk]
     
     
     # Flip Longitude
@@ -252,9 +257,9 @@ plt.savefig("%s%s_corr_%s.png"%(figpath,masktype[imsk],outstr),dpi=150)
 #%% || . || . . || . || Try some plots (Damping with selected Mask)
 
 
-plotlag  = 1
-plotmcf  = 1
-plotmsk  = 0
+plotlag  = 0
+plotmcf  = 0
+plotmsk  = 2
 
 outstr   = "lag%s_%s_MASK%s" % (lags[plotlag],mconfigs[plotmcf],masktype[plotmsk])
 titlestr = "Heat Flux Damping (%s ,Lag: %i, Mask=%s)" % (mconfigs[plotmcf],lags[plotlag],masktype[plotmsk])
@@ -437,8 +442,10 @@ for s in range(4):
 # ------------------------
 #%% Plot Seasonal Averages
 # ------------------------
-
+"""
 # Stochastic model Draft 5.0 Figure (Copied from viz_inputs_point.py)
+# Updated For Revision 1 08242022, New Bounding Box
+"""
 
 notitle   = True
 plot_mask = True
@@ -449,7 +456,7 @@ fig,axs = plt.subplots(2,2,figsize=(9,7.5),constrained_layout=True,
                       subplot_kw={'projection':proj})
 
 sp_id       = 0
-bboxplot    = [-80,0,5,60]
+bboxplot    = [-80,0,9,65]
 cints       = np.arange(-24,26,2)
 snamesl     = ('Winter (DJF)','Spring (MAM)','Summer (JJA)','Fall (SON)')
 
@@ -470,7 +477,8 @@ for s,ax in enumerate(axs.flatten()):
     #ax.clabel(cl,cints[::2],fontsize=8)
     
     if plot_mask:
-        viz.plot_mask(lon,lat,(smasks[s]*limask).T,reverse=False,ax=ax,markersize=1,color='gray')
+        viz.plot_mask(lon,lat,(smasks[s]*limask).T,reverse=False,
+                      ax=ax,markersize=1,color='gray',proj=proj,geoaxes=True)
         
     ax = viz.add_coast_grid(ax=ax,bbox=bboxplot,fill_color='gray',blabels=blabel,proj=proj)
     ax.set_title(snamesl[s],fontweight='bold')
@@ -482,8 +490,11 @@ cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.030,p
 cb.set_label("Atmospheric Heat Flux Feedback ($Wm^{-2}K^{-1}$)")
 if notitle is False:
     plt.suptitle("Seasonal Mean Mixed Layer Depth Differences in meters \n (CESM1 - WOA 1994)",fontsize=14,y=.94)
-plt.savefig("%sHFLX_Differences_FULL-SLAB_Savg.png" %(figpath),dpi=150,bbox_inches='tight')
 
+if pubready:
+    plt.savefig("%sFig12_CESM_HFF_Differences.png" %(figpath),dpi=900,bbox_inches='tight')
+else:
+    plt.savefig("%sHFLX_Differences_FULL-SLAB_Savg.png" %(figpath),dpi=150,bbox_inches='tight')
 
 # -----------------------------------------------------------
 #%% Plot HFF (SLAB vs FULL), seasonal averages, over a REGION
@@ -621,7 +632,6 @@ for i in tqdm(range(12)):
     ax     = viz.add_coast_grid(ax,bboxplot,blabels=blabel)
     ax.set_title(mons3[im])
     
-    
     plotvar = dampingnew[im,0,:,:] - dampingold[im,0,:,:]
     lon1,plotvar1 = proc.lon360to180(lon,plotvar.T[:,:,None])
     pcm = ax.contourf(lon1,lat,plotvar1.squeeze().T,levels=cints,
@@ -630,8 +640,6 @@ for i in tqdm(range(12)):
     cl  = ax.contour(lon1,lat,plotvar1.squeeze().T,levels=cints,
                       colors="k",linewidths=0.75)
     ax.clabel(cl,cints[::2])
-    
-    
     
     #msk    = rmasks[:,:,:,:,plotmcf,plotmsk]
     #ax,pcm = plot_hfdamping(plotlag,im,lon,lat,dampings[plotmcf]*-1,msk,ax=ax,cints=cints)
