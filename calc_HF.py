@@ -22,7 +22,7 @@ sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/
 from amv import proc
 
 #%% User Edits
-mconfig = "SLAB"
+mconfig = "FULL"
 
 # Paths to use
 datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_PIC_SLAB/02_ENSOREM/%s/" % mconfig # Output Path
@@ -175,6 +175,7 @@ if ensorem:
     ensoexp = "lag%i_pcs%i_monwin%i" % (ensolag,pcrem,emonwin)
     filepath = datpath+"ENSOREM_%s_"+ensoexp + ".npz"
 else:
+    ensoexp = "ensolag%i" % ensolag
     filepath = datpath+"ENSOREM0_%s_lag"+str(ensolag)+".npz"
 
 

@@ -200,9 +200,6 @@ for e in tqdm(loopens):
     outnc = "%s%sdiff_%s_%sto%s_ens%02i.nc" % (outpath_var,vname,exp,tstart[:4],tend[:4],e+1)
     ds_diff.to_netcdf(outnc,
              encoding={vname: {'zlib': True}})
-    
-
-
 
 # Plot the mean pattern for the selected period
 # title = "$U_{%.2f}$ - $U_{%.2f}$ \n %s to %s Mean" % (ds_sfc.lev.values,

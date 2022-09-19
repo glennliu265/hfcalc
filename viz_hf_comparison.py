@@ -55,12 +55,12 @@ ncnames = ("CESM1-PiC",
            "NCEP-NCAR Reanalysis I"
            )
 
-figpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220602/"
+figpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220808/"
 proc.makedir(figpath)
 
 # Plotting params
 proj     = ccrs.PlateCarree(central_longitude=0)
-bboxplot = [-80,0,10,62]
+bboxplot = [-80,0,9,65]
 cints    = np.arange(-50,55,5)
 
 vname    = 'nhflx_damping'

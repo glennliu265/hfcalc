@@ -44,7 +44,7 @@ lags = [1,2,3] # Lags to include
 lagstr = "1-2" # Labeling for plots (DONT FORGET TO CHANGE!)
 
 # Significance Testing Results
-mode  = 4 # (1) No mask (2) SST only (3) Flx only (4) Both
+mode  = 5 # (1) No mask (2) SST only (3) Flx only (4) Both
 p     = 0.05
 tails = 2
 dof   = 1898 - 1 - 2 - 2

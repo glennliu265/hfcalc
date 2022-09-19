@@ -52,13 +52,13 @@ overwrite         = False # Skip the file if it already exists
 
 # Select time crop (prior to preprocessing)
 croptime          = True # Cut the time prior to detrending, EOF, etc
-tstart            =  "2006-01-01" # '1920-01-01'
-tend              =  "2101-01-01" # '2006-01-01'
+tstart            =  '1920-01-01' # "2006-01-01" # 
+tend              =  '2006-01-01' #"2101-01-01" # 
 
 # Select time crop (for the estimate)
 croptime_estimate = True # Cut time right before estimating the heat flux feedback
-tcrop_start       = '2070-01-01'#"1970-01-01"#'1920-01-01'
-tcrop_end         = '2099-12-31'#"1999-12-31"#'1970-01-01'
+tcrop_start       = "1970-01-01"#'1920-01-01' '2070-01-01'#
+tcrop_end         = "1999-12-31"#'1970-01-01' '2099-12-31'#
 tcrop_fname       = ""
 if croptime_estimate:
     tcrop_fname      = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
@@ -67,8 +67,8 @@ if croptime_estimate:
 detrend           = 1 
 
 # Variables and Dataset Name
-vnames_in         = ['ts','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
-dataset_name      = 'rcp85'#'rcp85'
+vnames_in         = ['TS','FLNS'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+dataset_name      = 'htr'#'rcp85'
 ensnum            = 1
 
 lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
