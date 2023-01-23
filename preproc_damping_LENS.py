@@ -22,33 +22,40 @@ import matplotlib.pyplot as plt
 
 #%% User Edits
 
-modelname = "canesm2_lens"
+modelname = "gfdl_esm2m_lens"
 
+#"canesm2_lens"
 #"csiro_mk36_lens"
 #"gfdl_esm2m_lens"
 
 datpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/Amon/" % modelname
-outpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
 
+# For the LENs work...
+#outpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
+
+# For predict_amv
+outpath    = "/stormtrack/data3/glliu/01_Data/04_DeepLearning/CESM_data/LENS_other/"
 #mnum     = np.concatenate([np.arange(1,36),np.arange(101,106)])
+
+# Regridding Selection
+method     = "bilinear" # regridding method
+regrid     = 3 # Number of degrees for lat lon
 
 # Part 1 (Land/Ice Mask Creation)
 landpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/fx/sftlf/" % modelname
 icepath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/OImon/sic/" % modelname
-method     = "bilinear" # regridding method
 
 maskpaths  = (landpath,icepath)
-mvnames     = ("sftlf","sic") # Variables
+mvnames    = ("sftlf","sic") # Variables
 mthres     = (0.30,0.05) # Mask out if grid ever exceeds this value
 
 # Part 2 ()
 maskmode   = "enssum"
 
-
 vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
 vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
 
-
+# Note I have moved the below to amv.loader.... Need to update this.
 def get_lens_nc(modelname,vname,e,compname="Amon"):
     if modelname == "gfdl_esm2m_lens":
         ncname = "%s_%s_GFDL-ESM2M_historical_rcp85_r%ii1p1_195001-210012.nc" % (vname,compname,e+1)
@@ -92,6 +99,13 @@ def load_rcp85(vname,N,datpath=None):
         ds = xr.open_dataset(fn1)
     return ds[vname]
 
+#%% Define new lat lon grid
+
+if regrid is not None:
+    lonnew = np.arange(-180,180+regrid,regrid)
+    latnew = np.arange(-90,90+regrid,regrid)
+
+
 # ----------------------------
 #%% Part 1. Make Land/Ice Mask
 # ----------------------------
@@ -100,10 +114,6 @@ def load_rcp85(vname,N,datpath=None):
 
 
 # Regrid Ice values
-
-
-
-
 # Initialize Mask
 mask = [] #np.ones((nens,192,288))
 
@@ -138,26 +148,35 @@ for e in tqdm(range(nens)):
         else:
             lat   = dsland.lat.values
             lon   = dsland.lon.values
+    
+    if regrid is None:
+        latnew = lat
+        lonnew = lon
         
     
     # Regrid ice/land values (based on prep_mld_PIC.py)
-    ds_out    = xr.Dataset({'lat':lat,'lon':lon}) # Define new grid (note: seems to support flipping longitude)
+    ds_out    = xr.Dataset({'lat':latnew,'lon':lonnew}) # Define new grid (note: seems to support flipping longitude)
     regridder = xe.Regridder(dsice,ds_out,method,periodic=True)
     daproc    = regridder(dsice[mvnames[1]]) # Need to input dataarray
-    # Get land and ice fractions
-    if modelname == "csiro_mk36_lens": # Regrid landmask as well
-        regridder_land = xe.Regridder(dsland,ds_out,method,periodic=True)
-        daproc_land    = regridder_land(dsland['landmask'])
-        landfrac = daproc_land.values
+    
+    # Regrid land values
+    if modelname == "csir_mk36_lens":
+        landname = "landmask"
     else:
-        landfrac = dsland.sftlf.values
+        landname = "sftlf"
+    regridder_land = xe.Regridder(dsland,ds_out,method,periodic=True)
+    daproc_land    = regridder_land(dsland[landname])
+    landfrac       = daproc_land.values
+    
+    # Get land and ice fractions
+    #landfrac = dsland.sftlf.values
     icefrac  = daproc.values
     
     if np.any(icefrac>1):
         icefrac /=100 # Convert from % to decimal
     
     # Preallocate
-    emask = np.ones((len(lat),len(lon))) * np.nan 
+    emask = np.ones((len(latnew),len(lonnew))) * np.nan 
     
     # Make Landmask
     invar   = landfrac
@@ -181,24 +200,24 @@ for e in tqdm(range(nens)):
 mask = np.array(mask)  # [ENS x LAT x LON]
 
 # Save all members
-savename    = "%slandice_mask_%s_byens.npy" % (outpath,modelname)
+savename    = "%slandice_mask_%s_byens_regrid%ideg.npy" % (outpath,modelname,regrid)
 np.save(savename,mask)
 
 # Save ensemble sum
 mask_enssum = mask.prod(0)
-savename    = "%slandice_mask_%s_ensavg.npy" % (outpath,modelname)
+savename    = "%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelname,regrid)
 np.save(savename,mask_enssum)
 
 # Get Time dimension for later
 ntime = len(daproc.time)
-nlat  = len(lat)
-nlon  = len(lon)
+nlat  = len(latnew)
+nlon  = len(lonnew)
 
 # ------------------------------------------------------------
 #%% For each variable: Apply LI Mask, Compute Ensemble Average
 # ------------------------------------------------------------
 
-usemask = np.load("%slandice_mask_%s_ensavg.npy" % (outpath,modelname)) # [Lat x Lon]
+usemask = np.load("%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelname,regrid)) # [Lat x Lon]
 nvar    = len(vname_cmip)
 
 for e in tqdm(range(nens)):
@@ -215,6 +234,12 @@ for e in tqdm(range(nens)):
         ds       = xr.open_dataset(datpath+vname_in+"/"+ncname)
         invar    = ds[vname_in]
         
+        # Regrid the variable
+        if regrid is not None:
+            ds_out    = xr.Dataset({'lat':latnew,'lon':lonnew}) # Define new grid (note: seems to support flipping longitude)
+            regridder = xe.Regridder(invar,ds_out,method,periodic=True)
+            invar   = regridder(invar) # Need to input dataarray
+        
         # Apply the mask
         invar    *= usemask[None,:,:]
         
@@ -225,7 +250,7 @@ for e in tqdm(range(nens)):
             ensavg[0,:,:,:] += invar.values
             
             # Save the dataset
-            savename = "%s%s_%s_ens%02i.nc" % (outpath,modelname,"ts",e+1)
+            savename = "%s%s_%s_regrid%02i_ens%02i.nc" % (outpath,modelname,"ts",regrid,e+1)
             ds_msk = invar.rename('ts')
             ds_msk.to_netcdf(savename,encoding={'ts': {'zlib': True}})
             
@@ -251,7 +276,7 @@ for e in tqdm(range(nens)):
                 coords=coords,
                 name = 'qnet',
                 )
-    savename = "%s%s_%s_ens%02i.nc" % (outpath,modelname,"qnet",e+1)
+    savename = "%s%s_%s_regrid%ideg_ens%02i.nc" % (outpath,modelname,"qnet",regrid,e+1,)
     da.to_netcdf(savename,
              encoding={'qnet': {'zlib': True}})
     
@@ -267,6 +292,6 @@ for v in range(2):
                 coords=coords,
                 name = vnames[v],
                 )
-    savename = "%s%s_%s_ensAVG.nc" % (outpath,modelname,vnames[v])
+    savename = "%s%s_%s_regrid%02i_ensAVG.nc" % (outpath,modelname,vnames[v],regrid)
     da.to_netcdf(savename,
              encoding={vnames[v]: {'zlib': True}})
