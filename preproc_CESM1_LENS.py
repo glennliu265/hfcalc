@@ -10,6 +10,8 @@ This is RCP85 version (should be written to readjust this)
 - Combines Heat Fluxes
 - Prepares Ensemble Average Metric
 
+- Added regridding capabilities for predict_amv project
+
 Based on the following scripts:
     hf1_enavgrm
 
@@ -21,16 +23,20 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 from tqdm import tqdm
+import xarray as xr
+import xesmf as xe
 
 #%% User Edits
 
-datpath = "/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/"
-
-
+datpath     = "/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/"
+regrid      = 3
+regrid_step = True # Set to true if regrid indicates the stepsize rather than total dimension size.
+pred_prep   = True # Set to true to output to folders for AMV Prediction...
+predpath    = "/stormtrack/data3/glliu/01_Data/04_DeepLearning/CESM_data/LENS_other/"
 
 # Part 1 (Land/Ice Mask Creation)
-vnames  = ("LANDFRAC","ICEFRAC") # Variables
-mthres  = (0.30,0.05) # Mask out if grid ever exceeds this value
+vnames      = ("LANDFRAC","ICEFRAC") # Variables
+mthres      = (0.30,0.05) # Mask out if grid ever exceeds this value
 
 # Part 2 ()
 maskmode = "enssum"
@@ -46,6 +52,7 @@ elif mconfig == "htr":
     ntime = 1032
 #%% Functions
 
+### NOTE: 2023.01.24 >> Moved these functions onto amv.loader, need to rewrite this to load functions from there....ArithmeticError 
 # RCP85 Loader
 def load_rcp85(vname,N,datpath=None):
     if datpath is None:
@@ -135,8 +142,15 @@ np.save(savename,mask_enssum)
 # ------------------------------------------------------------
 usemask = np.load("%slandice_mask_%s_ensavg.npy" % (outpath,mconfig)) # [Lat x Lon]
 
-vnames    = ("TS","FSNS","FLNS","LHFLX","SHFLX",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
-calc_qnet = True#False # Set to True to compute Qnet
+if pred_prep: # Just prep the surface temperature
+    vnames    = ("TS",)
+    calc_qnet = False
+    savepath  = predpath
+    print("Saving for predict_amv in %s" % predpath)
+else:
+    vnames    = ("TS","FSNS","FLNS","LHFLX","SHFLX",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
+    calc_qnet = False # Set to True to compute Qnet
+    savepath  = outpath
 nvar      = len(vnames)
 
 if calc_qnet:
@@ -146,8 +160,6 @@ for e in tqdm(range(nens)):
     
     # ********************************
     N = mnum[e]
-    ensavg = np.zeros((nvar,ntime,192,288)) # [Var x Time x Lat x Lon]
-    qnet   = np.zeros((ntime,192,288)) 
     
     for v,vname in enumerate(vnames):
         
@@ -162,6 +174,33 @@ for e in tqdm(range(nens)):
         if vname == "FSNS":
             ds_msk *= -1 # Multiple to upwards positive
         
+        # Regrid, if option is set (note, need to see if qnet is sensitive to regridding step placement)
+        if regrid:
+            
+            lat = ds.lat
+            lon = ds.lon
+            if regrid_step:
+                lat_out = np.arange(lat[0],lat[-1]+regrid,regrid)
+                lon_out = np.arange(lon[0],lon[-1]+regrid,regrid)
+            else:
+                lat_out = np.linspace(lat[0],lat[-1],regrid)
+                lon_out = np.linspace(lon[0],lon[-1],regrid)
+            
+            ds_out    = xr.Dataset({'lat': (['lat'], lat_out), 'lon': (['lon'], lon_out) })
+            regridder = xe.Regridder(ds_msk, ds_out, 'bilinear')
+            ds_msk    = regridder(ds_msk)
+            
+        
+            
+        # Preallocate for first ensemble member!!
+        if e == 0:
+            nlat,nlon = len(ds_msk.lat),len(ds_msk.lon)
+            ensavg = np.zeros((nvar,ntime,nlat,nlon)) # [Var x Time x Lat x Lon]
+            if calc_qnet:
+                qnet   = np.zeros((ntime,nlat,nlon)) 
+        
+        
+        
         # Just Save it
         if (vname == "TS") or (calc_qnet==False):
             
@@ -170,7 +209,7 @@ for e in tqdm(range(nens)):
             ensavg[v,:,:,:] += ds_msk.values
                         
             # Save the dataset
-            savename = "%sCESM1_%s_%s_ens%02i.nc" % (outpath,mconfig,vname,e+1)
+            savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,vname,e+1)
             ds_msk = ds_msk.rename(vname)
             ds_msk.to_netcdf(savename,encoding={vname: {'zlib': True}})
             
@@ -188,7 +227,7 @@ for e in tqdm(range(nens)):
                     coords=coords,
                     name = 'qnet',
                     )
-        savename = "%sCESM1_%s_%s_ens%02i.nc" % (outpath,mconfig,"qnet",e+1)
+        savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,"qnet",e+1)
         da.to_netcdf(savename,
                  encoding={'qnet': {'zlib': True}})
     
@@ -206,7 +245,7 @@ for v in range(len(vnames)):
                 coords=coords,
                 name = vnames[v],
                 )
-    savename = "%sCESM1_%s_%s_ensAVG.nc" % (outpath,mconfig,vnames[v])
+    savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,vnames[v])
     da.to_netcdf(savename,
              encoding={vnames[v]: {'zlib': True}})
 

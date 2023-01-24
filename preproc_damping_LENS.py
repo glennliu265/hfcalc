@@ -7,6 +7,8 @@ Preprocess variables for heat flux damping calculations
 Adapted from
 - preproc_CESM1_LENS.py
 
+
+
 Created on Wed Jun 15 15:41:48 2022
 
 @author: gliu
@@ -22,38 +24,39 @@ import matplotlib.pyplot as plt
 
 #%% User Edits
 
-modelname = "gfdl_esm2m_lens"
-
+modelname = "mpi_lens"
+pred_prep = True # Set to True to prepare data for predict_amv project instead of hfcalc
 #"canesm2_lens"
-#"csiro_mk36_lens"
 #"gfdl_esm2m_lens"
+#"csiro_mk36_lens"
+#"mpi_lens"
 
 datpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/Amon/" % modelname
 
-# For the LENs work...
-#outpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
-
-# For predict_amv
-outpath    = "/stormtrack/data3/glliu/01_Data/04_DeepLearning/CESM_data/LENS_other/"
-#mnum     = np.concatenate([np.arange(1,36),np.arange(101,106)])
+# For the LENs work..
+if pred_prep:
+    outpath    = "/stormtrack/data3/glliu/01_Data/04_DeepLearning/CESM_data/LENS_other/"
+    vname_cmip = ("ts",)
+    vname_new  = ("ts",)
+    regrid     = 3 # Number of degrees for lat lon
+else:
+    outpath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
+    vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
+    vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
+    regrid     = None
 
 # Regridding Selection
-method     = "bilinear" # regridding method
-regrid     = 3 # Number of degrees for lat lon
+method         = "bilinear" # regridding method
 
 # Part 1 (Land/Ice Mask Creation)
-landpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/fx/sftlf/" % modelname
-icepath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/OImon/sic/" % modelname
-
-maskpaths  = (landpath,icepath)
-mvnames    = ("sftlf","sic") # Variables
-mthres     = (0.30,0.05) # Mask out if grid ever exceeds this value
+landpath       = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/fx/sftlf/" % modelname
+icepath        = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/OImon/sic/" % modelname
+maskpaths      = (landpath,icepath)
+mvnames        = ("sftlf","sic") # Variables
+mthres         = (0.30,0.05) # Mask out if grid ever exceeds this value
 
 # Part 2 ()
-maskmode   = "enssum"
-
-vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
-vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
+maskmode       = "enssum"
 
 # Note I have moved the below to amv.loader.... Need to update this.
 def get_lens_nc(modelname,vname,e,compname="Amon"):
@@ -61,9 +64,15 @@ def get_lens_nc(modelname,vname,e,compname="Amon"):
         ncname = "%s_%s_GFDL-ESM2M_historical_rcp85_r%ii1p1_195001-210012.nc" % (vname,compname,e+1)
     elif modelname == "csiro_mk36_lens":
         ncname = "%s_%s_CSIRO-Mk3-6-0_historical_rcp85_r%ii1p1_185001-210012.nc" % (vname,compname,e+1)
-        
     elif modelname == "canesm2_lens":
         ncname = "%s_%s_CanESM2_historical_rcp85_r%ii1p1_195001-210012.nc" % (vname,compname,e+1)
+    elif modelname == "mpi_lens":
+        if vname == "sic": # sic files are split into htr, rcp85
+            ncname1 = "%s_%s_MPI-ESM_historical_r%03ii1850p3_185001-200512.nc" % (vname,compname,e+1)
+            ncname2 = "%s_%s_MPI-ESM_rcp85_r%03ii2005p3_200601-209912.nc" % (vname,compname,e+1)
+            ncname  = [ncname1,ncname2]
+        else:
+            ncname = "%s_%s_MPI-ESM_historical_rcp85_r%ii1p1_185001-209912.nc" % (vname,compname,e+1)
     return ncname
 
 #%% Get list of files to see total ensemble count
@@ -104,8 +113,6 @@ def load_rcp85(vname,N,datpath=None):
 if regrid is not None:
     lonnew = np.arange(-180,180+regrid,regrid)
     latnew = np.arange(-90,90+regrid,regrid)
-
-
 # ----------------------------
 #%% Part 1. Make Land/Ice Mask
 # ----------------------------
@@ -126,18 +133,22 @@ for e in tqdm(range(nens)):
         landnc = "sftlf_fx_GFDL-ESM2M_historical_r0i0p0.nc"
     elif modelname == "canesm2_lens":
         landnc = "sftlf_fx_CanESM2_historical_r0i0p0.nc"
+    elif modelname == "mpi_lens":
+        landnc = "sftlf_fx_MPI-ESM-MR_historical_r0i0p0.nc"
     elif modelname == "csiro_mk36_lens":
-        landpath = outpath 
+        landpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname#outpath 
         landnc   = "barot_mask_csiro_mk36_lens.nc"
-        
     else:
         landnc = landnc = get_lens_nc(modelname,"sftlf",e,compname="fx")
     
     # Open dataset
-    dsice  = xr.open_dataset(icepath+icenc)
+    if modelname == "mpi_lens":
+        icenc = [icepath+nc for nc in icenc]
+        dsice = xr.open_mfdataset(icenc,concat_dim="time")
+    else:
+        dsice  = xr.open_dataset(icepath+icenc)
     dsland = xr.open_dataset(landpath+landnc)
     if e == 0: # Get Lat Lon
-    
         if modelname == "csiro_mk36_lens": # Lat/Lon in other dataset
             ncpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/csiro_mk36_lens/Amon/ts/"
             ncname = "ts_Amon_CSIRO-Mk3-6-0_historical_rcp85_r10i1p1_185001-210012.nc"
@@ -149,10 +160,10 @@ for e in tqdm(range(nens)):
             lat   = dsland.lat.values
             lon   = dsland.lon.values
     
+    # Set new Lat/Lon for regridding...
     if regrid is None:
         latnew = lat
         lonnew = lon
-        
     
     # Regrid ice/land values (based on prep_mld_PIC.py)
     ds_out    = xr.Dataset({'lat':latnew,'lon':lonnew}) # Define new grid (note: seems to support flipping longitude)
@@ -160,7 +171,7 @@ for e in tqdm(range(nens)):
     daproc    = regridder(dsice[mvnames[1]]) # Need to input dataarray
     
     # Regrid land values
-    if modelname == "csir_mk36_lens":
+    if modelname == "csiro_mk36_lens":
         landname = "landmask"
     else:
         landname = "sftlf"
