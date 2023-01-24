@@ -180,10 +180,10 @@ for e in tqdm(range(nens)):
             lon = ds.lon
             if regrid_step:
                 lat_out = np.arange(lat[0],lat[-1]+regrid,regrid)
-                lon_out = np.arange(lon[0],lon[-1]+regrid,regrid)
+                lon_out = np.arange(-180,180,regrid)
             else:
                 lat_out = np.linspace(lat[0],lat[-1],regrid)
-                lon_out = np.linspace(lon[0],lon[-1],regrid)
+                lon_out = np.linspace(-180,180,regrid)
             
             ds_out    = xr.Dataset({'lat': (['lat'], lat_out), 'lon': (['lon'], lon_out) })
             regridder = xe.Regridder(ds_msk, ds_out, 'bilinear')
@@ -241,23 +241,24 @@ if calc_qnet:
 #vnames = ['ts','qnet']
     
 for v in range(len(vnames)):
-
+    if vnames[v] == "TS":
+        vnames_save = "ts"
+    else:
+        vnames_save = vnames[v]
+        
     v_ensavg = ensavg[v,:,:,:]/nens
     
     da = xr.DataArray(v_ensavg,
                 dims=coords,
                 coords=coords,
-                name = vnames[v],
+                name = vnames_save,
                 )
-    if vnames[v] == "TS":
-        vnames_save = "ts"
-    else:
-        vnames_save = vnames[v]
+
     
     if pred_prep:
-        savename = "%sCESM1_%s_%s_regrid%ideg_ensAVG.nc" % (savepath,mconfig,vnames[v],regrid)
+        savename = "%sCESM1_%s_%s_regrid%ideg_ensAVG.nc" % (savepath,mconfig,vnames_save,regrid)
     else:
-        savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,vnames[v])
+        savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,vnames_save)
     da.to_netcdf(savename,
-             encoding={vnames[v]: {'zlib': True}})
+             encoding={vnames_save: {'zlib': True}})
 

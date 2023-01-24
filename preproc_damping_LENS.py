@@ -146,7 +146,7 @@ for e in tqdm(range(nens)):
         icenc = [icepath+nc for nc in icenc]
         dsice = xr.open_mfdataset(icenc,concat_dim="time")
     else:
-        dsice  = xr.open_dataset(icepath+icenc)
+        dsice  = xr.pwdopen_dataset(icepath+icenc)
     dsland = xr.open_dataset(landpath+landnc)
     if e == 0: # Get Lat Lon
         if modelname == "csiro_mk36_lens": # Lat/Lon in other dataset
@@ -261,7 +261,7 @@ for e in tqdm(range(nens)):
             ensavg[0,:,:,:] += invar.values
             
             # Save the dataset
-            savename = "%s%s_%s_regrid%02i_ens%02i.nc" % (outpath,modelname,"ts",regrid,e+1)
+            savename = "%s%s_%s_regrid%ideg_ens%02i.nc" % (outpath,modelname,"ts",regrid,e+1)
             ds_msk = invar.rename('ts')
             ds_msk.to_netcdf(savename,encoding={'ts': {'zlib': True}})
             
@@ -303,6 +303,6 @@ for v in range(2):
                 coords=coords,
                 name = vnames[v],
                 )
-    savename = "%s%s_%s_regrid%02i_ensAVG.nc" % (outpath,modelname,vnames[v],regrid)
+    savename = "%s%s_%s_regrid%ideg_ensAVG.nc" % (outpath,modelname,vnames[v],regrid)
     da.to_netcdf(savename,
              encoding={vnames[v]: {'zlib': True}})
