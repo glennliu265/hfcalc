@@ -9,8 +9,7 @@ This is RCP85 version (should be written to readjust this)
 - Takes TS, LandFrac, IceFrac, and makes SST
 - Combines Heat Fluxes
 - Prepares Ensemble Average Metric
-
-- Added regridding capabilities for predict_amv project
+- Added regridding capabilities for predict_amv project (pred_prep toggle)
 
 Based on the following scripts:
     hf1_enavgrm
@@ -199,20 +198,21 @@ for e in tqdm(range(nens)):
             if calc_qnet:
                 qnet   = np.zeros((ntime,nlat,nlon)) 
         
-        
-        
-        # Just Save it
+        # Just Save it for surface temperature
         if (vname == "TS") or (calc_qnet==False):
             
             #print("Saving %s variable separately!" % (vname))
             # Add values for ensemble averaging
             ensavg[v,:,:,:] += ds_msk.values
-                        
-            # Save the dataset
-            savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,vname,e+1)
-            ds_msk = ds_msk.rename(vname)
-            ds_msk.to_netcdf(savename,encoding={vname: {'zlib': True}})
             
+            
+            # Save the dataset
+            if pred_prep:
+                savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i.nc" % (savepath,mconfig,"ts",regrid,e+1)
+            else:
+                savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,vname,e+1)
+            ds_msk = ds_msk.rename("ts") # Rename TS to ts
+            ds_msk.to_netcdf(savename,encoding={"ts": {'zlib': True}})
         else:
             qnet += ds_msk.values
 
@@ -227,7 +227,10 @@ for e in tqdm(range(nens)):
                     coords=coords,
                     name = 'qnet',
                     )
-        savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,"qnet",e+1)
+        if pred_prep:
+            savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i.nc" % (savepath,mconfig,"qnet",regrid,e+1)
+        else:
+            savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,"qnet",e+1)
         da.to_netcdf(savename,
                  encoding={'qnet': {'zlib': True}})
     
@@ -238,6 +241,7 @@ if calc_qnet:
 #vnames = ['ts','qnet']
     
 for v in range(len(vnames)):
+
     v_ensavg = ensavg[v,:,:,:]/nens
     
     da = xr.DataArray(v_ensavg,
@@ -245,7 +249,15 @@ for v in range(len(vnames)):
                 coords=coords,
                 name = vnames[v],
                 )
-    savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,vnames[v])
+    if vnames[v] == "TS":
+        vnames_save = "ts"
+    else:
+        vnames_save = vnames[v]
+    
+    if pred_prep:
+        savename = "%sCESM1_%s_%s_regrid%ideg_ensAVG.nc" % (savepath,mconfig,vnames[v],regrid)
+    else:
+        savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,vnames[v])
     da.to_netcdf(savename,
              encoding={vnames[v]: {'zlib': True}})
 
