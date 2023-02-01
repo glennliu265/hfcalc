@@ -24,14 +24,15 @@ import matplotlib.pyplot as plt
 
 #%% User Edits
 
-modelname = "mpi_lens"
+modelname = "canesm2_lens"#"mpi_lens"
 pred_prep = True # Set to True to prepare data for predict_amv project instead of hfcalc
 #"canesm2_lens"
 #"gfdl_esm2m_lens"
 #"csiro_mk36_lens"
 #"mpi_lens"
 
-datpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/Amon/" % modelname
+
+datpath        = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/Amon/" % modelname
 
 # For the LENs work..
 if pred_prep:
@@ -39,11 +40,13 @@ if pred_prep:
     vname_cmip = ("ts",)
     vname_new  = ("ts",)
     regrid     = 3 # Number of degrees for lat lon
+    apply_limask = False
 else:
     outpath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
     vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
     vname_new  = ("fsns" ,"flns" ,"fsns" ,"flns" ,"hfss","hfls","ts")
     regrid     = None
+    apply_limask = True
 
 # Regridding Selection
 method         = "bilinear" # regridding method
@@ -113,122 +116,130 @@ def load_rcp85(vname,N,datpath=None):
 if regrid is not None:
     lonnew = np.arange(-180,180+regrid,regrid)
     latnew = np.arange(-90,90+regrid,regrid)
+
 # ----------------------------
 #%% Part 1. Make Land/Ice Mask
 # ----------------------------
 """ Makes land/ice mask. Saves for all ens members separate and all summed."""
 # Get number of ensemble members
 
-
 # Regrid Ice values
-# Initialize Mask
-mask = [] #np.ones((nens,192,288))
-
-for e in tqdm(range(nens)):
+if apply_limask:
+    # Initialize Mask
+    mask = [] #np.ones((nens,192,288))
     
-    # Get netCDF names
-    icenc  = get_lens_nc(modelname,"sic",e,compname="OImon")
-    
-    if modelname == "gfdl_esm2m_lens":
-        landnc = "sftlf_fx_GFDL-ESM2M_historical_r0i0p0.nc"
-    elif modelname == "canesm2_lens":
-        landnc = "sftlf_fx_CanESM2_historical_r0i0p0.nc"
-    elif modelname == "mpi_lens":
-        landnc = "sftlf_fx_MPI-ESM-MR_historical_r0i0p0.nc"
-    elif modelname == "csiro_mk36_lens":
-        landpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname#outpath 
-        landnc   = "barot_mask_csiro_mk36_lens.nc"
-    else:
-        landnc = landnc = get_lens_nc(modelname,"sftlf",e,compname="fx")
-    
-    # Open dataset
-    if modelname == "mpi_lens":
-        icenc = [icepath+nc for nc in icenc]
-        dsice = xr.open_mfdataset(icenc,concat_dim="time")
-    else:
-        dsice  = xr.pwdopen_dataset(icepath+icenc)
-    dsland = xr.open_dataset(landpath+landnc)
-    if e == 0: # Get Lat Lon
-        if modelname == "csiro_mk36_lens": # Lat/Lon in other dataset
-            ncpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/csiro_mk36_lens/Amon/ts/"
-            ncname = "ts_Amon_CSIRO-Mk3-6-0_historical_rcp85_r10i1p1_185001-210012.nc"
-            dstemp = xr.open_dataset(ncpath+ncname)
-            lat = dstemp.lat.values
-            lon = dstemp.lon.values
-            
+    for e in tqdm(range(nens)):
+        
+        # Get netCDF names
+        icenc  = get_lens_nc(modelname,"sic",e,compname="OImon")
+        
+        if modelname == "gfdl_esm2m_lens":
+            landnc = "sftlf_fx_GFDL-ESM2M_historical_r0i0p0.nc"
+        elif modelname == "canesm2_lens":
+            landnc = "sftlf_fx_CanESM2_historical_r0i0p0.nc"
+        elif modelname == "mpi_lens":
+            landnc = "sftlf_fx_MPI-ESM-MR_historical_r0i0p0.nc"
+        elif modelname == "csiro_mk36_lens":
+            landpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname#outpath 
+            landnc   = "barot_mask_csiro_mk36_lens.nc"
         else:
-            lat   = dsland.lat.values
-            lon   = dsland.lon.values
+            landnc = landnc = get_lens_nc(modelname,"sftlf",e,compname="fx")
+        
+        # Open dataset
+        if modelname == "mpi_lens":
+            icenc = [icepath+nc for nc in icenc]
+            dsice = xr.open_mfdataset(icenc,concat_dim="time")
+        else:
+            dsice  = xr.pwdopen_dataset(icepath+icenc)
+        dsland = xr.open_dataset(landpath+landnc)
+        if e == 0: # Get Lat Lon
+            if modelname == "csiro_mk36_lens": # Lat/Lon in other dataset
+                ncpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/csiro_mk36_lens/Amon/ts/"
+                ncname = "ts_Amon_CSIRO-Mk3-6-0_historical_rcp85_r10i1p1_185001-210012.nc"
+                dstemp = xr.open_dataset(ncpath+ncname)
+                lat = dstemp.lat.values
+                lon = dstemp.lon.values
+                
+            else:
+                lat   = dsland.lat.values
+                lon   = dsland.lon.values
+        
+        # Set new Lat/Lon for regridding...
+        if regrid is None:
+            latnew = lat
+            lonnew = lon
+        
+        # Regrid ice/land values (based on prep_mld_PIC.py)
+        ds_out    = xr.Dataset({'lat':latnew,'lon':lonnew}) # Define new grid (note: seems to support flipping longitude)
+        regridder = xe.Regridder(dsice,ds_out,method,periodic=True)
+        daproc    = regridder(dsice[mvnames[1]]) # Need to input dataarray
+        
+        # Regrid land values
+        if modelname == "csiro_mk36_lens":
+            landname = "landmask"
+        else:
+            landname = "sftlf"
+        regridder_land = xe.Regridder(dsland,ds_out,method,periodic=True)
+        daproc_land    = regridder_land(dsland[landname])
+        landfrac       = daproc_land.values
+        
+        # Get land and ice fractions
+        #landfrac = dsland.sftlf.values
+        icefrac  = daproc.values
+        
+        if np.any(icefrac>1):
+            icefrac /=100 # Convert from % to decimal
+        
+        # Preallocate
+        emask = np.ones((len(latnew),len(lonnew))) * np.nan 
+        
+        # Make Landmask
+        invar   = landfrac
+        inthres = mthres[0] 
+        if modelname == "csiro_mk36_lens":
+            maskpts = ~np.isnan(invar)
+        else:
+            maskpts = ((invar <= inthres)) # 0 is Land
+        emask[maskpts==1] = 1 # 1 means it is ocean point
+        
+        # Make Ice Mask
+        invar   = icefrac
+        inthres = mthres[1]
+        maskpts       = ((invar <= inthres).prod(0)) # 0 means it has sea ice
+        emask[maskpts==0] = np.nan
+        
+        
+        mask.append(emask.copy())
     
-    # Set new Lat/Lon for regridding...
-    if regrid is None:
-        latnew = lat
-        lonnew = lon
+    # Make into array
+    mask = np.array(mask)  # [ENS x LAT x LON]
     
-    # Regrid ice/land values (based on prep_mld_PIC.py)
-    ds_out    = xr.Dataset({'lat':latnew,'lon':lonnew}) # Define new grid (note: seems to support flipping longitude)
-    regridder = xe.Regridder(dsice,ds_out,method,periodic=True)
-    daproc    = regridder(dsice[mvnames[1]]) # Need to input dataarray
+    # Save all members
+    savename    = "%slandice_mask_%s_byens_regrid%ideg.npy" % (outpath,modelname,regrid)
+    np.save(savename,mask)
     
-    # Regrid land values
-    if modelname == "csiro_mk36_lens":
-        landname = "landmask"
-    else:
-        landname = "sftlf"
-    regridder_land = xe.Regridder(dsland,ds_out,method,periodic=True)
-    daproc_land    = regridder_land(dsland[landname])
-    landfrac       = daproc_land.values
-    
-    # Get land and ice fractions
-    #landfrac = dsland.sftlf.values
-    icefrac  = daproc.values
-    
-    if np.any(icefrac>1):
-        icefrac /=100 # Convert from % to decimal
-    
-    # Preallocate
-    emask = np.ones((len(latnew),len(lonnew))) * np.nan 
-    
-    # Make Landmask
-    invar   = landfrac
-    inthres = mthres[0] 
-    if modelname == "csiro_mk36_lens":
-        maskpts = ~np.isnan(invar)
-    else:
-        maskpts = ((invar <= inthres)) # 0 is Land
-    emask[maskpts==1] = 1 # 1 means it is ocean point
-    
-    # Make Ice Mask
-    invar   = icefrac
-    inthres = mthres[1]
-    maskpts       = ((invar <= inthres).prod(0)) # 0 means it has sea ice
-    emask[maskpts==0] = np.nan
-    
-    
-    mask.append(emask.copy())
+    # Save ensemble sum
+    mask_enssum = mask.prod(0)
+    savename    = "%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelname,regrid)
+    np.save(savename,mask_enssum)
 
-# Make into array
-mask = np.array(mask)  # [ENS x LAT x LON]
-
-# Save all members
-savename    = "%slandice_mask_%s_byens_regrid%ideg.npy" % (outpath,modelname,regrid)
-np.save(savename,mask)
-
-# Save ensemble sum
-mask_enssum = mask.prod(0)
-savename    = "%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelname,regrid)
-np.save(savename,mask_enssum)
-
-# Get Time dimension for later
-ntime = len(daproc.time)
-nlat  = len(latnew)
-nlon  = len(lonnew)
 
 # ------------------------------------------------------------
 #%% For each variable: Apply LI Mask, Compute Ensemble Average
 # ------------------------------------------------------------
 
+
+
+    
 usemask = np.load("%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelname,regrid)) # [Lat x Lon]
+    
+    
+    
+    #usemask = np.ones(usemask.shape)
+    
+nlat    = len(latnew)
+nlon    = len(lonnew)
+ntime   = len(daproc.time)
 nvar    = len(vname_cmip)
 
 for e in tqdm(range(nens)):
@@ -252,7 +263,13 @@ for e in tqdm(range(nens)):
             invar   = regridder(invar) # Need to input dataarray
         
         # Apply the mask
-        invar    *= usemask[None,:,:]
+        if apply_limask:
+            invar    *= usemask[None,:,:]
+        
+        # Preallocate if needed:
+        if e == 0:
+            
+        
         
         # Just save it
         if vname_in == "ts":
@@ -262,6 +279,8 @@ for e in tqdm(range(nens)):
             
             # Save the dataset
             savename = "%s%s_%s_regrid%ideg_ens%02i.nc" % (outpath,modelname,"ts",regrid,e+1)
+            if apply_limask is False:
+                savename = "%s%s_%s_regrid%ideg_ens%02i_nomask.nc" % (outpath,modelname,"ts",regrid,e+1)
             ds_msk = invar.rename('ts')
             ds_msk.to_netcdf(savename,encoding={'ts': {'zlib': True}})
             
@@ -287,7 +306,10 @@ for e in tqdm(range(nens)):
                 coords=coords,
                 name = 'qnet',
                 )
+    
     savename = "%s%s_%s_regrid%ideg_ens%02i.nc" % (outpath,modelname,"qnet",regrid,e+1,)
+    if apply_limask is False:
+        savename = "%s%s_%s_regrid%ideg_ens%02i_nomask.nc" % (outpath,modelname,"qnet",regrid,e+1,)
     da.to_netcdf(savename,
              encoding={'qnet': {'zlib': True}})
     
@@ -304,5 +326,7 @@ for v in range(2):
                 name = vnames[v],
                 )
     savename = "%s%s_%s_regrid%ideg_ensAVG.nc" % (outpath,modelname,vnames[v],regrid)
+    if apply_limask is False:
+        savename = "%s%s_%s_regrid%ideg_ensAVG_nomask.nc" % (outpath,modelname,vnames[v],regrid)
     da.to_netcdf(savename,
              encoding={vnames[v]: {'zlib': True}})

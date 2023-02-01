@@ -33,6 +33,7 @@ regrid_step = True # Set to true if regrid indicates the stepsize rather than to
 pred_prep   = True # Set to true to output to folders for AMV Prediction...
 predpath    = "/stormtrack/data3/glliu/01_Data/04_DeepLearning/CESM_data/LENS_other/"
 
+
 # Part 1 (Land/Ice Mask Creation)
 vnames      = ("LANDFRAC","ICEFRAC") # Variables
 mthres      = (0.30,0.05) # Mask out if grid ever exceeds this value
@@ -145,10 +146,12 @@ if pred_prep: # Just prep the surface temperature
     vnames    = ("TS",)
     calc_qnet = False
     savepath  = predpath
+    apply_limask =False
     print("Saving for predict_amv in %s" % predpath)
 else:
     vnames    = ("TS","FSNS","FLNS","LHFLX","SHFLX",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
     calc_qnet = False # Set to True to compute Qnet
+    apply_limask=True
     savepath  = outpath
 nvar      = len(vnames)
 
@@ -169,7 +172,10 @@ for e in tqdm(range(nens)):
             ds = load_htr(vname,N,datpath=datpath)
         
         # Apply the mask
-        ds_msk = ds * usemask[None,:,:]
+        if apply_limask:
+            ds_msk = ds * usemask[None,:,:]
+        else:
+            ds_msk = ds
         if vname == "FSNS":
             ds_msk *= -1 # Multiple to upwards positive
         
@@ -228,8 +234,11 @@ for e in tqdm(range(nens)):
                     name = 'qnet',
                     )
         if pred_prep:
-            savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i.nc" % (savepath,mconfig,"qnet",regrid,e+1)
-        else:
+            if apply_limask:
+                savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i.nc" % (savepath,mconfig,"qnet",regrid,e+1)
+            else:
+                savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i_nomask.nc" % (savepath,mconfig,"qnet",regrid,e+1)
+        else: # Always apply mask for HFF calculations
             savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,"qnet",e+1)
         da.to_netcdf(savename,
                  encoding={'qnet': {'zlib': True}})
@@ -256,7 +265,11 @@ for v in range(len(vnames)):
 
     
     if pred_prep:
-        savename = "%sCESM1_%s_%s_regrid%ideg_ensAVG.nc" % (savepath,mconfig,vnames_save,regrid)
+        if apply_limask:
+            savename = "%sCESM1_%s_%s_regrid%ideg_ensAVG.nc" % (savepath,mconfig,vnames_save,regrid)
+        else:
+            savename = "%sCESM1_%s_%s_regrid%ideg_ensAVG_nomask.nc" % (savepath,mconfig,vnames_save,regrid)
+    
     else:
         savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,vnames_save)
     da.to_netcdf(savename,
