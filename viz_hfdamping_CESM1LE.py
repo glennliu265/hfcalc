@@ -1049,7 +1049,31 @@ plt.savefig("%sRegionally_avged_hff_T2_relationship.png" % (figpath),dpi=150,bbo
 
     
 
-#%%
+#%% Compare Selected Ensemble Members (WIP, delete later as rcp85 has moved to another script)
+
+proj    = ccrs.PlateCarree(central_longitude=0)
+fig,axs = plt.subplots(2,12,subplot_kw={'projection':proj},figsize=(24,4),
+                       constrained_layout=True)
+
+for mconfig in range(2):
+    
+    for im in range(12):
+        
+        blabel = [0,0,0,0]
+        if im == 0:
+            blabel[0] = 1
+        if mconfig == 1:
+            blabel[-1] = 1
+        
+        ax = axs[mconfig,im]
+        ax = viz.add_coast_grid(ax,bbox=bboxplot,proj=proj,fill_color='gray',
+                                blabels=blabel)
+    
+    
+
+
+
+
 
 
 

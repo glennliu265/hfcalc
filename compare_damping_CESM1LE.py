@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-||||||||||||||||||||||| ||||||||| =========
+- - - - - - - - - - - - - - - - - - - - - - |
+||||||||||||||||||||||| ||||||||| ========= |
 -----------------------
-Compare Damping CESM1LE ||||||||| ---------
+Compare Damping CESM1LE ||||||||| --------- |
 -----------------------
-||||||||||||||||||||||| ||||||||| =========
+||||||||||||||||||||||| ||||||||| ========= |
+- - - - - - - - - - - - - - - - - - - - - - |
 
 Compare Damping Between the CESM1 LENS Historical and RCP85 Periods
 
@@ -71,23 +73,29 @@ def plot_hfdamping(e,plotlag,plotmon,lon,lat,damping,msk,ax=None,cints=None):
 
 # Set the File Names
 use_htr_old = False # Use old HTR (not the one calculated by calc_enso_general)
-expname     = '30y_70to00'# [None,30y_70to00,50y_firstlast]
+expname     =  None # [None,30y_70to00,50y_firstlast]
+vname       = "LHFLX"
 
 if expname is None:
-    vname = 'nhflx_damping'
+    
     # Historical
     if use_htr_old:
+        #vname = 'nhflx'
         datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
         ncname    = "CESM1-LE_NHFLX_Damping_raw.nc"
         dof       = 82
     else:
+        #vname = "qnet"
         datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
-        ncname    = "CESM1_htr_qnet_damping_ensorem1_detrend1_1920to2005_allens.nc"
+        ncname    = "CESM1_htr_%s_damping_ensorem1_detrend1_1920to2005_allens.nc" % vname
         dof       = 82
     
     # RCP85
     datpath85 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/"
-    ncname85  = "CESM1_rcp85_hfdamping_ensorem1_detrend1_2006to2101_allens.nc"
+    if vname == "qnet":
+        ncname85  = "CESM1_rcp85_hfdamping_ensorem1_detrend1_2006to2101_allens.nc"
+    else:
+        ncname85  = "CESM1_rcp85_%s_damping_ensorem1_detrend1_2006to2101_allens.nc" % vname
     dof85       = (2101-2006) - 4 + 1
     
 elif expname is '30y_70to00':
@@ -98,11 +106,11 @@ elif expname is '30y_70to00':
     dof       = 30
     dof85     = 30
     
-    datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/30y_70to00/htr/"
-    datpath85 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/30y_70to00/rcp85/"
+    datpath   = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/30y_70to00/%s_damping/htr/" % vname
+    datpath85 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/CESM-HTR-RCP85/30y_70to00/%s_damping/rcp85/" % vname
     
-    #ncname    = "CESM1_htr_qnet_damping_ensorem1_detrend1_1970to2000_allens.nc"
-    #ncname85  = "CESM1_rcp85_qnet_damping_ensorem1_detrend1_2070to2100_allens.nc"
+    ncname    = "CESM1_htr_%s_damping_ensorem1_detrend1_1970to2000_allens.nc" % vname
+    ncname85  = "CESM1_rcp85_%s_damping_ensorem1_detrend1_2070to2100_allens.nc" % vname
     
 # Paths, Names
 figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220815/"
@@ -123,6 +131,8 @@ datpaths = [datpath,datpath85]
 ncnames  = [ncname,ncname85]
 dofs     = [dof,dof85]
 
+
+
 dampings = []
 rflxs    = []
 rssts    = []
@@ -138,10 +148,16 @@ for mc in range(2):
 
 
     # Optionally load in the numpy arrays
+    damping_name = "%s_damping" % vname
+    if vname == "qnet":
+        if use_htr_old or mc==1 and expname is None:
+            damping_name = "nhflx_damping"
+    
+    # Load the values
     if (use_htr_old) or ((mc == 1) and (expname is None)):
-        damping = ds.nhflx_damping.values     # Damping [ens x lag x mon x lat x lon]
+        damping = ds[damping_name].values     # Damping [ens x lag x mon x lat x lon]
     else:
-        damping = ds.qnet_damping.values
+        damping = ds[damping_name].values
     rflx    = ds.sst_flx_crosscorr.values
     rsst    = ds.sst_autocorr.values
     
@@ -241,7 +257,7 @@ for im in tqdm(range(12)):
     cb.set_label("Heat Flux Feedback ($Wm^{-2} \degree C^{-1}$)",fontsize=14)
     plt.suptitle("Heat Flux Feedback for ENS %i, Month: %s"%(ie+1,months[im]),fontsize=24)
     
-    savename = "%sHFF_Comparison_HTRvRCP85_ens%02i_mon%02i.png" % (figpath,ie+1,im+1)
+    savename = "%s%sHFF_Comparison_HTRvRCP85_ens%02i_mon%02i.png" % (figpath,vname,ie+1,im+1)
     plt.savefig(savename,dpi=150,bbox_inches='tight')
         
 #%% Examine Intermember Variability in Differences for a given month...
@@ -384,15 +400,15 @@ for mc in range(3):
     elif mc == 2:
         fig.colorbar(pcm,ax=axs[2],orientation='vertical',fraction=0.015,pad=0.01)
 
-plt.suptitle("%s Net Heat Flux Feedback (Lag %i, $Wm^{-2}K^{-1}$)" % ("Annual Average",il+1),y=1.03,x=.67,fontsize=16)
-plt.savefig("%sNHFLX_Damping_HTRvRCP85_%s_%s_lag%i_%s.png" % (figpath,mode,"AnnAvg",il+1,expname),
+plt.suptitle("%s %s Feedback (Lag %i, $Wm^{-2}K^{-1}$)" % ("Annual Average",vname,il+1),y=1.03,x=.67,fontsize=16)
+plt.savefig("%s%s_Damping_HTRvRCP85_%s_%s_lag%i_%s.png" % (figpath,vname,mode,"AnnAvg",il+1,expname),
             dpi=200,bbox_inches='tight',transparent=False)
 
 
 #%% Visualize just the Qnet damping differences, but contour style
 # matching the differences in vertical atmospheric variables
 
-fig,ax = plt.subplots(1,1,figsize=(12,6.5),facecolor='white',
+fig,ax  = plt.subplots(1,1,figsize=(12,6.5),facecolor='white',
                        subplot_kw={'projection':proj})
 
 cints   = np.arange(-20,22,2)
@@ -400,14 +416,14 @@ cints   = np.arange(-20,22,2)
 plotvar = np.mean(dampings[1][:,il,im,:,:] - dampings[0][:-2,il,im,:,:],(0,1))
 plotmsk = np.prod((malls[1][:,il,im,:,:] * malls[0][:-2,il,im,:,:]),(0,1))
 plotvar,lon1 = add_cyclic_point(plotvar,coord=lon)
-pcm = ax.contourf(lon1,lat,plotvar,levels=cints,cmap=cmap,extend='both')
-cl  = ax.contour(lon1,lat,plotvar,levels=cints,colors='k',linewidths=0.5)
+pcm     = ax.contourf(lon1,lat,plotvar,levels=cints,cmap=cmap,extend='both')
+cl      = ax.contour(lon1,lat,plotvar,levels=cints,colors='k',linewidths=0.5)
 ax.clabel(cl,levels=cints[::2])
 
-ax = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,fill_color='k',ignore_error=True)
+ax      = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,fill_color='k',ignore_error=True)
 
 ax.set_title("Net Heat Flux Feedback Differences (RCP8.5 - Historical; Lag 1, Ens and Ann. Avg)")
-cb = fig.colorbar(pcm,ax=ax,fraction=0.018)
+cb      = fig.colorbar(pcm,ax=ax,fraction=0.018)
 cb.set_label("%s Difference (%s) " % ("Net Heat Flux Feedback Difference","$W m^{-2}$"))
 plt.savefig("%sNHFLX_Damping_HTRvRCP85_AVG_%s_lag%i_%s_contour.png" % (figpath,"AnnAvg",il+1,expname),
             dpi=200,bbox_inches='tight',transparent=False)
@@ -436,15 +452,15 @@ for s in range(4):
     ax = viz.add_coast_grid(ax,proj=proj,bbox=bboxplot_glob,blabels=blabel,
                             fill_color='k',ignore_error=True)
     
-    plotvar = savgs[s]
+    plotvar      = savgs[s]
     plotvar,lon1 = add_cyclic_point(plotvar,coord=lon)
-    pcm = ax.contourf(lon1,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
-    cl = ax.contour(lon1,lat,plotvar,levels=[0,],linecolors="k",linewidths=0.5)
+    pcm          = ax.contourf(lon1,lat,plotvar,levels=cints,cmap='cmo.balance',extend='both')
+    cl           = ax.contour(lon1,lat,plotvar,levels=[0,],linecolors="k",linewidths=0.5)
     #ax.clabel(cl,inline_spacing=5)
     
     # Add Subplot Labels
-    ax = viz.label_sp(seastr[s],ax=ax,labelstyle="%s",alpha=0.75,usenumber=True,fontsize=25)
-    
+    ax           = viz.label_sp(seastr[s],ax=ax,labelstyle="%s",alpha=0.75,usenumber=True,fontsize=25)
+
 fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.045,pad=0.01)
 plt.suptitle("Seasonally-Averaged Net Heat Flux Feedback Differences(Lag %i, $Wm^{-2}K^{-1}$) \n RCP85 - HTR" % (il+1),y=1.10,fontsize=16)
 plt.savefig("%sNHFLX_Damping_DIFFERENCES_SAVG_lag%i_%s.png" % (figpath,il+1,expname),
