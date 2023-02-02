@@ -23,8 +23,7 @@ import xesmf as xe
 import matplotlib.pyplot as plt
 
 #%% User Edits
-
-modelname = "csiro_mk36_lens"#"gfdl_esm2m_lens"#"canesm2_lens"#"mpi_lens"
+modelname = "mpi_lens"
 pred_prep = True # Set to True to prepare data for predict_amv project instead of hfcalc
 make_mask = True
 mask_sep  = True # Set to True to save land and ice masks separately
@@ -43,6 +42,7 @@ if pred_prep:
     vname_cmip = ("ts",)
     vname_new  = ("ts",)
     regrid     = 3 # Number of degrees for lat lon
+    apply_limask = False
 else:
     outpath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
     vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
@@ -126,7 +126,7 @@ if regrid is not None:
 # Get number of ensemble members
 
 # Regrid Ice values
-if apply_limask or (make_mask==False):
+if apply_limask or make_mask:
     
     # Initialize Mask
     mask = [] #np.ones((nens,192,288))
@@ -156,7 +156,7 @@ if apply_limask or (make_mask==False):
             icenc = [icepath+nc for nc in icenc]
             dsice = xr.open_mfdataset(icenc,concat_dim="time")
         else:
-            dsice  = xr.pwdopen_dataset(icepath+icenc)
+            dsice  = xr.open_dataset(icepath+icenc)
         dsland = xr.open_dataset(landpath+landnc)
         if e == 0: # Get Lat Lon
             if modelname == "csiro_mk36_lens": # Lat/Lon in other dataset
