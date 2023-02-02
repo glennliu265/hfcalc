@@ -24,8 +24,11 @@ import matplotlib.pyplot as plt
 
 #%% User Edits
 
-modelname = "canesm2_lens"#"mpi_lens"
+modelname = "csiro_mk36_lens"#"gfdl_esm2m_lens"#"canesm2_lens"#"mpi_lens"
 pred_prep = True # Set to True to prepare data for predict_amv project instead of hfcalc
+make_mask = True
+mask_sep  = True # Set to True to save land and ice masks separately
+
 #"canesm2_lens"
 #"gfdl_esm2m_lens"
 #"csiro_mk36_lens"
@@ -40,7 +43,6 @@ if pred_prep:
     vname_cmip = ("ts",)
     vname_new  = ("ts",)
     regrid     = 3 # Number of degrees for lat lon
-    apply_limask = False
 else:
     outpath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % modelname
     vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
@@ -124,9 +126,13 @@ if regrid is not None:
 # Get number of ensemble members
 
 # Regrid Ice values
-if apply_limask:
+if apply_limask or (make_mask==False):
+    
     # Initialize Mask
     mask = [] #np.ones((nens,192,288))
+    if mask_sep:
+        lmasks = []
+        imasks = []
     
     for e in tqdm(range(nens)):
         
@@ -201,15 +207,24 @@ if apply_limask:
         else:
             maskpts = ((invar <= inthres)) # 0 is Land
         emask[maskpts==1] = 1 # 1 means it is ocean point
+        if mask_sep: # Copy separate landmask
+            lmask = emask.copy()
         
         # Make Ice Mask
         invar   = icefrac
         inthres = mthres[1]
         maskpts       = ((invar <= inthres).prod(0)) # 0 means it has sea ice
         emask[maskpts==0] = np.nan
-        
-        
+        if mask_sep: # Copy separate icemask
+            imask = np.ones((len(latnew),len(lonnew))) * np.nan 
+            imask[maskpts==0] = np.nan
+            
+        # Append for the ensemble member
         mask.append(emask.copy())
+        if mask_sep:
+            lmasks.append(lmask)
+            imasks.append(imask)
+            
     
     # Make into array
     mask = np.array(mask)  # [ENS x LAT x LON]
@@ -222,6 +237,24 @@ if apply_limask:
     mask_enssum = mask.prod(0)
     savename    = "%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelname,regrid)
     np.save(savename,mask_enssum)
+    
+    
+    # Repeat process above, but separately for land.ice
+    if mask_sep:
+        masklists = [lmasks,imasks]
+        masknames = ("land","ice")
+        for mm in range(2):
+            
+            # Save all masks
+            maskarr  = np.array(masklists[mm])
+            savename = "%s%s_mask_%s_byens_regrid%ideg.npy" % (outpath,masknames[mm],modelname,regrid)
+            np.save(savename,maskarr)
+            
+            # Save ens sum
+            masks_enssum = maskarr.prod(0)
+            savename    = "%s%s_mask_%s_ensavg_regrid%ideg.npy" % (outpath,masknames[mm],modelname,regrid)
+            np.save(savename,masks_enssum)
+        
 
 
 # ------------------------------------------------------------
@@ -237,10 +270,14 @@ usemask = np.load("%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelnam
     
     #usemask = np.ones(usemask.shape)
     
+# Open a dataarray for the purpose of getting the time dimension size for preallocation...
+dstest  = xr.open_dataset(datpath+vname_cmip[0]+"/"+get_lens_nc(modelname,vname_cmip[0],1,))
+
 nlat    = len(latnew)
 nlon    = len(lonnew)
-ntime   = len(daproc.time)
 nvar    = len(vname_cmip)
+ntime   = len(dstest.time)
+
 
 for e in tqdm(range(nens)):
     
@@ -266,8 +303,7 @@ for e in tqdm(range(nens)):
         if apply_limask:
             invar    *= usemask[None,:,:]
         
-        # Preallocate if needed:
-        if e == 0:
+
             
         
         

@@ -32,7 +32,7 @@ regrid      = 3
 regrid_step = True # Set to true if regrid indicates the stepsize rather than total dimension size.
 pred_prep   = True # Set to true to output to folders for AMV Prediction...
 predpath    = "/stormtrack/data3/glliu/01_Data/04_DeepLearning/CESM_data/LENS_other/"
-
+mask_sep    = True
 
 # Part 1 (Land/Ice Mask Creation)
 vnames      = ("LANDFRAC","ICEFRAC") # Variables
@@ -101,11 +101,16 @@ nens = len(mnum)
 
 # Initialize Mask
 mask = [] #np.ones((nens,192,288))
-
+if mask_sep:
+    lmasks = []
+    imasks = []
 # Loop for each ensemble member
 for e in tqdm(range(nens)):
     N = mnum[e] # Get ensemble member
     emask = np.ones((192,288)) * np.nan # Preallocate
+    if mask_sep:
+        imask = emask.copy()
+        lmask = emask.copy()
     for v in range(2):
     
         # Load dataset
@@ -121,9 +126,17 @@ for e in tqdm(range(nens)):
         if v == 0: # Landmask
             maskpts       = ((invar <= inthres).prod(0)) # [Lat x Lon]
             emask[maskpts==1] = 1 # 1 means it is ocean point
+            if mask_sep:
+                lmask[maskpts==1] = 1
         elif v == 1:
             maskpts       = ((invar <= inthres).prod(0)) # [Lat x Lon]
             emask[maskpts==0] = np.nan # 0 means it has sea ice
+            if mask_sep:
+                imask[maskpts==0] = np.nan
+    # Save masks separately
+    if mask_sep:
+        imasks.append(imask)
+        lmasks.append(lmask)
     mask.append(emask.copy())
 # Make into array
 mask = np.array(mask)  # [ENS x LAT x LON]
@@ -136,6 +149,22 @@ np.save(savename,mask)
 mask_enssum = mask.prod(0)
 savename = "%slandice_mask_%s_ensavg.npy" % (outpath,mconfig)
 np.save(savename,mask_enssum)
+
+
+if mask_sep:
+    masklists = [lmasks,imasks]
+    masknames = ("land","ice")
+    for mm in range(2):
+        
+        # Save all masks
+        maskarr  = np.array(masklists[mm])
+        savename = "%s%s_mask_%s_byens_regrid%ideg.npy" % (outpath,masknames[mm],"CESM1",regrid)
+        np.save(savename,maskarr)
+        
+        # Save ens sum
+        masks_enssum = maskarr.prod(0)
+        savename    = "%s%s_mask_%s_ensavg_regrid%ideg.npy" % (outpath,masknames[mm],"CESM1",regrid)
+        np.save(savename,masks_enssum)
 
 # ------------------------------------------------------------
 #%% For each variable: Apply LI Mask, Compute Ensemble Average
@@ -214,7 +243,10 @@ for e in tqdm(range(nens)):
             
             # Save the dataset
             if pred_prep:
-                savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i.nc" % (savepath,mconfig,"ts",regrid,e+1)
+                if apply_limask:
+                    savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i.nc" % (savepath,mconfig,"ts",regrid,e+1)
+                else:
+                    savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i_nomask.nc" % (savepath,mconfig,"ts",regrid,e+1)
             else:
                 savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,vname,e+1)
             ds_msk = ds_msk.rename("ts") # Rename TS to ts
