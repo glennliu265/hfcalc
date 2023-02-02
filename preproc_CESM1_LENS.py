@@ -156,14 +156,20 @@ if mask_sep:
     masknames = ("land","ice")
     for mm in range(2):
         
+        if pred_prep:
+            savepath = predpath
+        else:
+            savepath = outpath
+        
+        
         # Save all masks
         maskarr  = np.array(masklists[mm])
-        savename = "%s%s_mask_%s_byens_regrid%ideg.npy" % (outpath,masknames[mm],"CESM1",regrid)
+        savename = "%s%s_mask_%s_byens_regrid%ideg.npy" % (savepath,masknames[mm],"CESM1",regrid)
         np.save(savename,maskarr)
         
         # Save ens sum
         masks_enssum = maskarr.prod(0)
-        savename    = "%s%s_mask_%s_ensavg_regrid%ideg.npy" % (outpath,masknames[mm],"CESM1",regrid)
+        savename    = "%s%s_mask_%s_ensavg_regrid%ideg.npy" % (savepath,masknames[mm],"CESM1",regrid)
         np.save(savename,masks_enssum)
 
 # ------------------------------------------------------------
