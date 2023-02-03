@@ -109,7 +109,7 @@ for e in tqdm(range(nens)):
     N = mnum[e] # Get ensemble member
     emask = np.ones((192,288)) * np.nan # Preallocate
     if mask_sep:
-        imask = emask.copy()
+        imask = np.ones((192,288))
         lmask = emask.copy()
     for v in range(2):
     
@@ -132,7 +132,7 @@ for e in tqdm(range(nens)):
             maskpts       = ((invar <= inthres).prod(0)) # [Lat x Lon]
             emask[maskpts==0] = np.nan # 0 means it has sea ice
             if mask_sep:
-                imask[maskpts==0] = np.nan
+                imask[maskpts==0] = np.nan # All points 1, ice points NaN
     # Save masks separately
     if mask_sep:
         imasks.append(imask)
@@ -152,9 +152,36 @@ np.save(savename,mask_enssum)
 
 
 if mask_sep:
+    
+    longlob = ds.lon.values
+    latglob = ds.lat.values
+    
     masklists = [lmasks,imasks]
     masknames = ("land","ice")
     for mm in range(2):
+        
+        # Regrid the mask
+        if regrid_step:
+            
+            maskarr = np.array(masklists[mm])
+            
+            lat_out = np.arange(latglob[0],latglob[-1]+regrid,regrid)
+            lon_out = np.arange(-180,180,regrid)
+            
+            ds_out    = xr.Dataset({'lat': (['lat'], lat_out), 'lon': (['lon'], lon_out) })
+            ds_in     = xr.Dataset({'lat': (['lat'], latglob), 'lon': (['lon'], longlob) })
+            coordsdict = {"ensemble":np.arange(1,43,1),
+                          "lat":latglob,
+                          "lon":longlob}
+            
+            ds_msk    = xr.DataArray(maskarr,
+                                     dims=coordsdict,
+                                     coords=coordsdict,
+                                     name="icemask")# Make into a numpy array
+            regridder = xe.Regridder(ds_in, ds_out, 'bilinear')
+            ds_msk    = regridder(ds_msk)
+        
+            masklists[mm] = maskarr
         
         if pred_prep:
             savepath = predpath
@@ -164,6 +191,7 @@ if mask_sep:
         
         # Save all masks
         maskarr  = np.array(masklists[mm])
+        
         savename = "%s%s_mask_%s_byens_regrid%ideg.npy" % (savepath,masknames[mm],"CESM1",regrid)
         np.save(savename,maskarr)
         
@@ -245,7 +273,6 @@ for e in tqdm(range(nens)):
             #print("Saving %s variable separately!" % (vname))
             # Add values for ensemble averaging
             ensavg[v,:,:,:] += ds_msk.values
-            
             
             # Save the dataset
             if pred_prep:
