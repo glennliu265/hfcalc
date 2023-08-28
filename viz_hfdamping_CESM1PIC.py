@@ -66,23 +66,23 @@ def load_dampraw(mconfig,datpath):
 # Load some data
 #limaskname = "limask180_FULL-HTR.npy" 
 # Note this only works locally, need to make equivalent on stormtrack
-lon,lat=scm.load_latlon(datpath=llpath,lon360=True)
-lon180,_ = scm.load_latlon(datpath=llpath)
-limask   = np.load(lipath+"../landicemask_enssum.npy")
-limask180    = np.load(lipath+"limask180_FULL-HTR.npy")
+lon,lat     = scm.load_latlon(datpath=llpath,lon360=True)
+lon180,_    = scm.load_latlon(datpath=llpath)
+limask      = np.load(lipath+"../landicemask_enssum.npy")
+limask180   = np.load(lipath+"limask180_FULL-HTR.npy")
 
-dampings   = [] # [mon x lag x lat x lon360]
-rssts      = []
-rflxs      = []
+dampings    = [] # [mon x lag x lat x lon360]
+rssts       = []
+rflxs       = []
 for i,mcf in enumerate(mconfigs):
 
     # Load Data
-    a,b,c = load_dampraw(mcf,datpath)
+    a,b,c   = load_dampraw(mcf,datpath)
     
     # Check sign
     if np.nansum(np.sign(c)) < 0:
         print("WARNING! sst-flx correlation is mostly negative, sign will be flipped")
-        c*=-1
+        c   *=-1
     
     dampings.append(a)#*limask[None,None,:,:]) # Apply Landice Mask
     rssts.append(b)

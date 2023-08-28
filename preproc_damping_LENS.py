@@ -33,7 +33,6 @@ mask_sep  = True # Set to True to save land and ice masks separately
 #"csiro_mk36_lens"
 #"mpi_lens"
 
-
 datpath        = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/00_Commons/CLIVAR_LE/%s/Amon/" % modelname
 
 # For the LENs work..
@@ -216,7 +215,7 @@ if apply_limask or make_mask:
         maskpts       = ((invar <= inthres).prod(0)) # 0 means it has sea ice
         emask[maskpts==0] = np.nan
         if mask_sep: # Copy separate icemask
-            imask = np.ones((len(latnew),len(lonnew))) * np.nan 
+            imask = np.ones((len(latnew),len(lonnew))) #1 elswhere, nan = ice* np.nan 
             imask[maskpts==0] = np.nan
             
         # Append for the ensemble member
