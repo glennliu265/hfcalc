@@ -128,7 +128,7 @@ if seasonplot == 1
         end
 
         % Open Corresponding Figure Number
-        figure(fign)
+        figure(fig`n)
         hold on
 
         if topleft == 1 && cnt == 2
