@@ -37,12 +37,14 @@ if stormtrack:
 else:
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/03_Scripts/stochmod/model/")
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
-    
+
     # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
     datpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
     figpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220511/"
 from amv import proc,viz
 import scm
+
+
 #%% User Settings
 
 proc.makedir(figpath)

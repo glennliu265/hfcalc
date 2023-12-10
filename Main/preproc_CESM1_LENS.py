@@ -91,8 +91,7 @@ def load_htr(vname,N,datpath=None):
     if N == 1:
         ds = ds.sel(time=slice("1920-02-01","2006-01-01"))
     return ds[vname]
-    
-    
+
 # ----------------------------
 #%% Part 1. Make Land/Ice Mask
 # ----------------------------

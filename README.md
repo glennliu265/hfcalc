@@ -4,10 +4,37 @@ Scripts to calculate heat flux feedback (HFF).
 
 # Introduction and Notes
 
+Compute the heat flux feedback (HFF) using lag covariances. The following steps are performed:
 
+Required Input Variables (monthly timestep):
+    - Surface Temperature, 		(TS)
+    - Land Fraction, 			(LANDFRAC)
+    - Ice Fraction, 			(ICEFRAC)
+    - Surface Shortwave Radiation, 	(FSNS)
+    - Surface Longwave Radiation, 	(FLNS)
+    - Sensible Heat Flux, 		(SHFLX)
+    - Latent Heat Flux, 		(LHFLX)
+    - Sea Surface Salinity, 		(SSS)
+
+
+
+### Preprocessing
+1. Create a land-ice mask.
+2. Apply mask to Surface Temperature (TS) to obtain sea surface temperatures SSTs
+3. Combine radiative and turbulent heat fluxes to get the net heat flux (Qnet), or use separate heat fluxes
+4. Detrend and compute monthly anomalies for each variable
+
+### ENSO Removal
+5. Compute the ENSO Index using EOF Analysis.
+6. Remove the ENSO-related component from each variable via regression.
+
+### Feedback Calculation
+7. Compute for each month the lagged covariances between the heat flux and SST.
+8. Perform significance testing (Students t-test) on lagged cross-correlation and autocorrelation.
+9. Combine separate heat flux feedbacks to get the net heat flux feedback (if chosen).
 
 # Organization
-See legend below
+Contents and descriptions. See legend below.
 
 ## Main
 ### Preprocessing

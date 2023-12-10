@@ -7,8 +7,6 @@ Preprocess variables for heat flux damping calculations
 Adapted from
 - preproc_CESM1_LENS.py
 
-
-
 Created on Wed Jun 15 15:41:48 2022
 
 @author: gliu
@@ -262,7 +260,7 @@ if apply_limask or make_mask:
 
 
 
-    
+
 usemask = np.load("%slandice_mask_%s_ensavg_regrid%ideg.npy" % (outpath,modelname,regrid)) # [Lat x Lon]
     
     
