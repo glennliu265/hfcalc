@@ -13,6 +13,16 @@ Created on Thu Feb  1 13:44:49 2024
 
 import numpy as np
 
+#%% Degrees of Freedom  for a Simulation (assuming independent data)
+
+dofs_cesm = {
+    "PIC_FULL_paper": 1898-1-2-2   ,# PiControl 400-2200, # 1 for Enso Lag, 2 for month window shift? , Should this be 1801?
+    "PIC_SLAB_paper": 898-1-2-2    ,##, PiControl 100-1100, Should this be 901?
+    "PIC_FULL"      : (1801-1-2)*3 ,# Adjusted to include month window?
+    "PIC_SLAB"      : (901-1-2)*3  ,# Adjusted
+    "HTR_FULL"      : (86-1-2)*3   ,# Historical 1920-2005
+    }
+
 #%% HFF Significance Testing / Preprocessing Names
 
 # Default run for stochastic model
