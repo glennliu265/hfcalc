@@ -28,15 +28,23 @@ import xesmf as xe
 #%% User Edits
 
 datpath     = "/vortex/jetstream/climate/data1/yokwon/CESM1_LE/downloaded/atm/proc/tseries/monthly/"
-regrid      = 3
-regrid_step = True # Set to true if regrid indicates the stepsize rather than total dimension size.
-pred_prep   = True # Set to true to output to folders for AMV Prediction...
+regrid      = False
+regrid_step = False # Set to true if regrid indicates the stepsize rather than total dimension size.
+pred_prep   = False # Set to true to output to folders for AMV Prediction...
 predpath    = "/stormtrack/data3/glliu/01_Data/04_DeepLearning/CESM_data/LENS_other/"
 mask_sep    = True
 
+# Option to process regridded SST
+use_SST     = True # Set to true to use SST regridded by prep_mld script (in stochmod). Otherwise use TS
+SSTpath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/02_stochmod/SST/"
+SSTncs      = ["SST_FULL_HTR_bilinear_num%02i.nc" % i for i in range(42)]
+
 # Part 1 (Land/Ice Mask Creation)
 vnames      = ("LANDFRAC","ICEFRAC") # Variables
-mthres      = (0.30,0.05) # Mask out if grid ever exceeds this value
+mthres      = (0.30,1.00) # Mask out if grid ever exceeds this value
+
+maskname  = "land%03i_ice%03i" % (mthres[0]*100,mthres[1]*100)
+
 
 # Part 2 ()
 maskmode = "enssum"
@@ -92,6 +100,45 @@ def load_htr(vname,N,datpath=None):
         ds = ds.sel(time=slice("1920-02-01","2006-01-01"))
     return ds[vname]
 
+
+def lon180to360(lon180,var,debug=True):
+    """
+    Convert Longitude from Degrees West to Degrees East 
+    Inputs:
+        1. lon180 - array with longitude in degrees west
+        2. var    - corresponding variable [lon x lat x time]
+        3. autoreshape - BOOL, reshape variable autocmatically if size(var) > 3
+    Copied from proc on 2024.02.08
+    """
+    
+    # Reshape to combine dimensions
+        
+    kw = np.where(lon180 < 0)[0]
+    ke = np.where(lon180 >= 0)[0]
+    lon360 = np.concatenate((lon180[ke],lon180[kw]+360),0)
+    if var is None:
+        return lon360
+    var = np.concatenate((var[ke,...],var[kw,...]),0)
+    
+
+    return lon360,var
+
+
+
+def fix_febstart(ds):
+    # Copied from preproc_CESM.py on 2022.11.15
+    if ds.time.values[0].month != 1:
+        print("Warning, first month is %s. Fixing."% ds.time.values[0])
+        # Get starting year, must be "YYYY"
+        startyr = str(ds.time.values[0].year)
+        while len(startyr) < 4:
+            startyr = '0' + startyr
+        nmon = ds.time.shape[0] # Get number of months
+        # Corrected Time
+        correctedtime = xr.cftime_range(start=startyr,periods=nmon,freq="MS",calendar="noleap")
+        ds = ds.assign_coords(time=correctedtime) 
+    return ds
+
 # ----------------------------
 #%% Part 1. Make Land/Ice Mask
 # ----------------------------
@@ -141,13 +188,20 @@ for e in tqdm(range(nens)):
 mask = np.array(mask)  # [ENS x LAT x LON]
 
 # Save all members
-savename = "%slandice_mask_%s_byens.npy" % (outpath,mconfig)
+savename = "%smasks/landice_mask_%s_%s_byens.npy" % (outpath,maskname,mconfig)
 np.save(savename,mask)
 
 # Save ensemble sum
 mask_enssum = mask.prod(0)
-savename = "%slandice_mask_%s_ensavg.npy" % (outpath,mconfig)
+savename = "%smasks/landice_mask_%s_%s_ensavg.npy" % (outpath,maskname,mconfig)
 np.save(savename,mask_enssum)
+
+# Save as netCDF
+coords  = {'ens':np.arange(1,43,1),'lat':ds.lat.values,'lon':ds.lon.values,}
+da_mask = xr.DataArray(mask,coords=coords,dims=coords,name='mask')
+savename =  "%smasks/landice_mask_%s_%s_byens.nc" % (outpath,maskname,mconfig)
+da_mask.to_netcdf(savename)
+
 
 
 if mask_sep:
@@ -202,7 +256,14 @@ if mask_sep:
 # ------------------------------------------------------------
 #%% For each variable: Apply LI Mask, Compute Ensemble Average
 # ------------------------------------------------------------
-usemask = np.load("%slandice_mask_%s_ensavg.npy" % (outpath,mconfig)) # [Lat x Lon]
+
+# Load  the mask [Lat x Lon]
+savename =  "%smasks/landice_mask_%s_%s_byens.nc" % (outpath,maskname,mconfig)
+ds_mask  = xr.open_dataset(savename)
+
+usemask  = ds_mask.mask.values.prod(0) # Lat x Lon
+
+nens      = len(ds_mask.ens)
 
 if pred_prep: # Just prep the surface temperature
     vnames    = ("TS",)
@@ -211,7 +272,10 @@ if pred_prep: # Just prep the surface temperature
     apply_limask =False
     print("Saving for predict_amv in %s" % predpath)
 else:
-    vnames    = ("TS","FSNS","FLNS","LHFLX","SHFLX",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
+    if use_SST:
+        vnames    = ("FSNS","FLNS","LHFLX","SHFLX",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
+    else:
+        vnames    = ("TS","FSNS","FLNS","LHFLX","SHFLX")
     calc_qnet = False # Set to True to compute Qnet
     apply_limask=True
     savepath  = outpath
@@ -232,6 +296,8 @@ for e in tqdm(range(nens)):
             ds = load_rcp85(vname,N,datpath=datpath)
         elif mconfig == 'htr':
             ds = load_htr(vname,N,datpath=datpath)
+        
+        ds = fix_febstart(ds).load()
         
         # Apply the mask
         if apply_limask:
@@ -306,7 +372,42 @@ for e in tqdm(range(nens)):
             savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,"qnet",e+1)
         da.to_netcdf(savename,
                  encoding={'qnet': {'zlib': True}})
+
+#%% Need to process SST, if it is available
+
+if use_SST:
+    nclist = [SSTpath + fn for fn in SSTncs]
+    nclist.sort()
+    ds_sst_all = []
     
+    for e in range(nens):
+        
+        # Load ds
+        ds = xr.open_dataset(nclist[e]) # [Time, z_t, lat, lon]
+        ds = fix_febstart(ds) # make sure to fix the first month
+        ds = ds.sel(time=slice('1920-01-01','2006-01-01'))
+        
+        # Flip Longitude (do this the dumb way)
+        sst = ds.SST.load().values
+        lon180 = ds.lon.values
+        lat = ds.lat.values
+        sst = sst.squeeze().transpose(2,1,0) # Lon x Lat x Time
+        lon360,sst360 = lon180to360(lon180,sst)
+        newcoord = dict(time=ds.time.values,lat=lat,lon=lon360)
+        da_new = xr.DataArray(sst360.transpose(2,1,0),coords=newcoord,dims=newcoord,name="ts")
+        
+        edict    = {'ts':{'zlib':True}}
+        savepath = outpath
+        savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,'ts',e+1)
+        da_new.to_netcdf(savename,encoding=edict)
+        
+        ds_sst_all.append(da_new)
+
+    
+
+
+#%%
+
 # Compute and save ensemble averages
 if calc_qnet:
     vnames = ['ts','qnet']
