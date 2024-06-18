@@ -58,7 +58,7 @@ tstart            =  '1920-01-01' # "2006-01-01" #
 tend              =  '2006-01-01' #"2101-01-01" # 
 
 # Select time crop (for the estimate)
-croptime_estimate = True # Cut time right before estimating the heat flux feedback
+croptime_estimate = False # Cut time right before estimating the heat flux feedback
 tcrop_start       = "1970-01-01"#'1920-01-01' '2070-01-01'#
 tcrop_end         = "1999-12-31"#'1970-01-01' '2099-12-31'#
 tcrop_fname       = ""
@@ -69,7 +69,7 @@ if croptime_estimate:
 detrend           = 1 
 
 # Variables and Dataset Name
-vnames_in         = ['TS','FLNS'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+vnames_in         = ['ts','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
 dataset_name      = 'htr'#'rcp85'
 ensnum            = 1
 
@@ -424,12 +424,12 @@ for ensnum in np.arange(1,nens+1):
     # Save heat flux (from hfdamping_mat2nc.py)
     # ----------------------------------------
     outvars  = [damping,crosscorr,autocorr,cov,autocov]
-    datpath_out = "%s%s_damping/" % (datpath,v)
+    datpath_out = "%s/useSST/%s_damping/" % (datpath,v)
     proc.makedir(datpath_out)
     savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s_%scrop.nc" % (datpath_out,dataset_name,ensorem,detrend,timestr,tcrop_fname)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-    dims     = {'month':np.arange(1,13,1),
+    dims     = {'month'  :np.arange(1,13,1),
                   "lag"  :np.arange(1,4,1),
                   "lat"  :lat,
                   "lon"  :lon}
