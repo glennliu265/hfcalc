@@ -1,11 +1,42 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+
 Compute ENSO component, and remove it.
 Also compute the heat flux feedback.
 
 Works with output from preproc_ncep.py, but will work to generalize it
 This includes the flux data (non-anomalized )
+
+The Steps
+
+-------
+Part 1: Preprocess Variables  (Anomalize, Detrend, Flip latitude if needed)
+-------
+    In   : [time x lat x lon360], li mask applied
+    Out  : [time x lat x lon180], detrended, latitude corrected
+    
+-------
+Part 2: Compute ENSO indices 
+-------
+    In   : 
+        Anomalized and detrended TS with landice mask applied [time x lat x lon]
+        ENSO Bounding Box and Period
+        
+    Out  :
+        eofall (ENSO EOF Patterns)          [lon x lat x month x pc]
+        pcall  (ENSO principle components)  [time x month x pc]
+        varexpall (ENSO variance explained) [month x pc]]
+        lon,lat,time,ensobbox variables
+
+-------
+Part 3: Remove ENSO component via regression
+-------
+    In: 
+    
+
+
+
 
 Plots:
     - Plots for each month for a given simulation
@@ -26,14 +57,17 @@ import cartopy.crs as ccrs
 import glob
 
 #%% Import modules
+
 stormtrack = 1
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
     
     # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
-    datpath =  "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
-    figpath =  "/home/glliu/02_Figures/01_WeeklyMeetings/20220622"
+    #datpath =  "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
+    datpath =  "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/anom/"
+    figpath =  "/home/glliu/02_Figures/01_WeeklyMeetings/20240621/"
+    
 else:
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/03_Scripts/stochmod/model/")
     sys.path.append("/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/")
@@ -49,13 +83,20 @@ import scm
 
 proc.makedir(figpath)
 
+
+# Set Paths
+procpath = datpath + "/anom/"
+ensopath = datpath + "/enso/"
+hffpath  = datpath + "/hff/"
+maskpath = datpath + "/masks/"
+
 # Part 1 (Preprocessing) ------------------------------------------
 overwrite         = False # Skip the file if it already exists
 
 # Select time crop (prior to preprocessing)
-croptime          = True # Cut the time prior to detrending, EOF, etc
-tstart            =  '1920-01-01' # "2006-01-01" # 
-tend              =  '2006-01-01' #"2101-01-01" # 
+croptime          = False # Cut the time prior to detrending, EOF, etc
+tstart            =  '0001-01-01' # "2006-01-01" # 
+tend              =  '2000-02-01' #"2101-01-01" # 
 
 # Select time crop (for the estimate)
 croptime_estimate = False # Cut time right before estimating the heat flux feedback
@@ -69,10 +110,11 @@ if croptime_estimate:
 detrend           = 1 
 
 # Variables and Dataset Name
-vnames_in         = ['ts','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
-dataset_name      = 'htr'#'rcp85'
+vnames_in         = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+dataset_name      = 'cesm2_pic'#'rcp85'
 ensnum            = 1
 
+# For these datasets, loop for each ensemble member...
 lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
 #"csiro_mk36_lens"
 #'CESM1_FULL_PIC'
@@ -86,7 +128,7 @@ elif dataset_name in ('gfdl_esm2m_lens', "csiro_mk36_lens"):
     nens = 30
 elif dataset_name == 'canesm2_lens':
     nens = 50
-elif dataset_name == 'htr':
+elif dataset_name == 'htr': # CESM1 Historical
     nens = 42
 else:
     nens = 1
@@ -106,7 +148,6 @@ bbox     = [120, 290, -20, 20] # ENSO Bounding Box
 ensolag  = 1    # Lag between ENSO month and response month in NATL
 reduceyr = True # Drop years due to ENSO lag
 monwin   = 3    # Window of months to consider
-
 
 # Part 4 (HFF Calculations) -------------------------------------------
 ensorem  = True
@@ -154,6 +195,7 @@ for ensnum in np.arange(1,nens+1):
                 datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % dataset_name
                 da = xr.open_dataset("%s%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
         else:
+            
             da = xr.open_dataset(datpath+"%s_%s.nc" % (dataset_name,v))
         
         if croptime:
@@ -163,12 +205,14 @@ for ensnum in np.arange(1,nens+1):
         # ----------------------------------------------
         times   = da[tname].values
         timesyr = times.astype('datetime64[Y]').astype(int) +1970
-        timestr = "%ito%i" % (timesyr[0],timesyr[-1])
+        timestr = "%04ito%04i" % (timesyr[0],timesyr[-1])
+        
         # Set Save Name
         savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
         if lensflag:
             savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         query = glob.glob(savename)
+        
         if (len(query) < 1) or (overwrite == True):
             
             # Read out the other variables # [time x lat x lon]
@@ -235,6 +279,9 @@ for ensnum in np.arange(1,nens+1):
                 data_dt = np.zeros((nmon,nlat*nlon)) * np.nan
                 data_dt[:,okpts] = okdt
                 data_dt = data_dt.reshape(nmon,nlat,nlon) # Back to [time x lat x lon]
+                
+                # Save the output to same path...
+                da      = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
             else:
                 data_dt = vanom
                 
