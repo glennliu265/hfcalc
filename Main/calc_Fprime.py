@@ -7,6 +7,8 @@ calculate_Fprime.py
 ========================
 
 Copied from calc_Fprime_lens.py
+Works with output processed by [preproc_raw_inputs]
+
 
 Given Damping, MLD, SST , and Qnet, compute Fprime where:
     Qnet = F' + lbd*T
@@ -16,7 +18,9 @@ So:
 Does the same for E', where Qnet is replaced by QLHFLX
     E' = Qlhflx - lbd*T'
 
-Where T and Qnet are not anomalized. Written to run on Astraeus...
+Where T and Qnet are not anomalized. Written to run on stormtracl currently
+
+
 This script will be used by NHFLX_EOF_monthly.
 
 Inputs:
@@ -24,10 +28,10 @@ Inputs:
 
     varname : dims                              - units                 - processing script
     SST     : (ensemble, time, lat, lon)        [degC]                  ????
-    qnet    : (ensemble, time, lat, lon)        [W/m2]                  ????
-    h       : (mon, ens, lat, lon)              [meters]                ????
-    damping : (mon, ens, lat, lon)              [degC/W/m2] OR [1/mon]  ????
-
+    qnet    : (ensemble, time, lat, lon)        [W/m2]                  
+    h       : (month, ens, lat, lon)            [meters]                calc_hclim.py, prep_mld_PIC.py
+    damping : (mon, ens, lat, lon)              [degC/W/m2] OR [1/mon]  calc_enso_general.py
+    
 Outputs: 
 ------------------------
 
@@ -59,34 +63,151 @@ import sys
 import time
 import matplotlib.pyplot as plt
 
-#%% Import Custom Modules
-amvpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/" # amv module
-scmpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/02_stochmod/03_Scripts/stochmod/model/"
-
+#%%
+# stormtrack
+amvpath = "/home/glliu/00_Scripts/01_Projects/00_Commons/" # amv module
 sys.path.append(amvpath)
-sys.path.append(scmpath)
+import amv.proc as hf
 
-from amv import proc,viz
-import scm
-import amv.loaders as dl
-import yo_box as ybx
 
 #%% Set Paths
 
-Eprime     = True # Set to True to Compute E' instead of F'
+Eprime     = False # Set to True to Compute E' instead of F'
 
 stormtrack = 0
 
-# Path to variables processed by prep_data_byvariable_monthly, Output will be saved to rawpath1
-if stormtrack:
-    rawpath1 = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/CESM1/NATL_proc/"
-    dpath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/damping/"
-    mldpath  = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/mld/"
-else:
-    rawpath1 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/CESM1/NATL_proc/"
-    mldpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/model_input/mld/"
-    dpath    = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/model_input/damping/"
+# # Path to variables processed by prep_data_byvariable_monthly, Output will be saved to rawpath1
+# if stormtrack:
+#     rawpath1 = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/CESM1/NATL_proc/"
+#     dpath    = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/damping/"
+#     mldpath  = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/mld/"
+# else:
+#     rawpath1 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/CESM1/NATL_proc/"
+#     mldpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/model_input/mld/"
+#     dpath    = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/model_input/damping/"
 
+
+# Indicate inputs
+datname = "cesm2_pic"
+
+# Mixed Layer Depth --> [h: time x lat x lon180]
+mldpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/mld/"
+mldnc        = "cesm2_pic_HMXL_NAtl_0200to2000.nc"
+mldname      = "h"
+
+# Net Heat Flux (Positive Upwards) --> [qnet: time x lat x lon180]
+flxpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
+flxnc        = "cesm2_pic_qnet_NAtl_0200to2000.nc"
+flxname      = 'qnet'
+
+# SST
+sstpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
+sstnc        = "cesm2_pic_TS_NAtl_0200to2000.nc"
+sstname      = 'TS'
+
+# Damping 
+damppath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/qnet_damping/"
+dampnc       = "cesm2_pic_hfdamping_NAtl_0200to2000_ensorem1_detrend1.nc"
+dampname     = 'qnet_damping'
+ilag         = 0 # Indicate which lag to select
+
+# Damping Information and roll options
+dampstr     = "CESM2PiCqnetDamp"
+nroll       = 0 # Amount to roll lbd*T' term
+rollstr     = "nroll%0i"  % nroll
+convert_wm2 = True # Convert hff to wm2
+
+# Conversion Factors
+dt  = 3600*24*30
+cp0 = 3996
+rho = 1026
+
+lensflag    = True # Set to True to detrend with ensemble average
+
+#%% Functions
+def format_ds_mon(ds):
+    if "ensemble" in list(ds.dims):
+        print("Renaming 'ensemble' --> ens")
+        ds = ds.rename({'ensemble':'ens'})
+    if "month" in list(ds.dims):
+        print("Renaming 'month' --> mon")
+        ds = ds.rename({'month':'mon'})
+    return ds
+
+# -----------------------------------------------------------------------------
+#%% Part 1: Load, Deseasonalize, Detrend qnet and SST
+# -----------------------------------------------------------------------------
+# Note this was copied from preproc_sm_inputs_SSS.py
+st       = time.time()
+
+# Load TS, flux and preprocess -------------------------
+# if Eprime:
+#     print("Loading LHFLX to compute E'")
+#     flxname = "LHFLX"
+# else:
+#     print("Loading Q_net to compute F'")
+#     flxname = "qnet"
+
+# Load SST and Flux
+st      = time.time()
+ds_sst  = xr.open_dataset(sstpath+sstnc)[sstname].load() # Load SST
+ds_flx  = xr.open_dataset(flxpath+flxnc)[flxname].load() # Load qnet
+print("Loaded Flux and SST in %.2fs" % (time.time()-st))
+
+# Preprocess 
+ds_load = [ds_sst,ds_flx]
+# if ds_sst.shape != ds_flx.shape:
+#     print("Resizing variables")
+#     ds_load = hf.resize_ds(ds_load) # (make sure they are the same size)
+
+# Anomalize
+ds_anom  = [hf.xrdeseason(ds) for ds in ds_load]
+
+# Detrend
+if lensflag:
+    print("Detrending by removing ensemble mean")
+    ds_dt    = [ds-ds.mean('ensemble') for ds in ds_anom] # [ens x time x lat x lon]
+    ds_dt    = [ds.transpose('time','ensemble','lat','lon') for ds in ds_dt]
+else:
+    print("Applying Simple Linear Detrend")
+    ds_dt    = [hf.xrdetrend(ds) for ds in ds_anom]
+    ds_dt    = [ds.transpose('time','lat','lon') for ds in ds_dt]
+    ds_dt    = [format_ds_mon(ds) for ds in ds_dt]
+    
+# -----------------------------------------------------------------------------
+#%% Part 2: Load Damping/MLD and Convert HFF
+# -----------------------------------------------------------------------------
+
+# Load HFF from [calc_hff_general.py]
+dshff    = xr.open_dataset(damppath + dampnc)[dampname]      # [mon x (lag) x (ens) x lat x lon]
+if "lag" in list(dshff.dims):
+    dshff = dshff.isel(lag=ilag)
+    print("Selecting lag %i for heat flux feedback" % dshff.lag)
+    
+# Load mixed layer depth for conversion from [calc_hclim.py] # [mon x lat x lon]
+ds_mld   = xr.open_dataset(mldpath + mldnc)[mldname]
+
+
+# Double Check the Sizes
+ds_in   = ds_dt + [dshff,ds_mld]
+ds_in   = hf.resize_ds(ds_in)
+sst,qnet,dshff,ds_mld = ds_in
+
+# Convert HFF (1/mon to W/m2 per degC) if needed
+if convert_wm2:
+    print("Converting to Wm2")
+    dshff = dshff * (rho*cp0*ds_mld) / dt  *-1 #need to do a check for - value!!
+else:
+    dshff= dshff
+
+# Load output to numpy
+hff     = dshff.values
+sst     = sst.values
+qnet    = qnet.values
+
+#%%
+
+#%%
 # Indicate Search String for qnet/SST files ------d
 ncstr1   = "CESM1LE_%s_NAtl_19200101_20050101_bilinear.nc"
 
@@ -95,7 +216,7 @@ mldnc    = "%sCESM1_HTR_FULL_HMXL_NAtl.nc" % mldpath
 
 # Fprime Calculation Options
 nroll    = 0
-rollstr  = "nroll%0i"  % nroll
+
 
 # Damping Options ----------
 dampstr = "LHFLXnomasklag1" # Damping String  (see below, "load damping of choice")
@@ -128,30 +249,7 @@ dt  = 3600*24*30
 cp0 = 3996
 rho = 1026
 
-# -----------------------------------------------------------------------------
-#%% Part 1: Load, Deseasonalize, Detrend qnet and SST
-# -----------------------------------------------------------------------------
-# Note this was copied from preproc_sm_inputs_SSS.py
-st       = time.time()
 
-# Load TS, flux and preprocess -------------------------
-if Eprime:
-    print("Loading LHFLX to compute E'")
-    flxname = "LHFLX"
-else:
-    print("Loading Q_net to compute F'")
-    flxname = "qnet"
-varnames = ["SST",flxname]
-ds_load  =[xr.open_dataset(rawpath1+ ncstr1 % vn).load() for vn in varnames]
-
-# Anomalize
-ds_anom  = [proc.xrdeseason(ds) for ds in ds_load]
-
-# Detrend
-ds_dt    = [ds-ds.mean('ensemble') for ds in ds_anom] # [ens x time x lat x lon]
-
-# Transpose to [mon x ens x lat x lon]
-ds_dt    = [ds.transpose('time','ensemble','lat','lon') for ds in ds_dt]
 
 # -----------------------------------------------------------------------------
 #%% Part 2: Load and Convert Damping
@@ -159,10 +257,10 @@ ds_dt    = [ds.transpose('time','ensemble','lat','lon') for ds in ds_dt]
 
 
 # Load HFF
-dshff    = xr.open_dataset(dpath + hff_nc) # [mon x ens x lat x lon]
+dshff    = xr.open_dataset(damppath+dampnc)[dampname] # [mon x ens x lat x lon]
 
 # Load mixed layer depth for conversion
-ds_mld   = xr.open_dataset(mldnc)
+ds_mld   = xr.open_dataset(mldnc)[mldname]
 
 # Check sizes, make sure they are all the same...
 # if dampstr is not None: # Not sure why, but it seems that the hff default is wrongly cropped
@@ -175,7 +273,7 @@ ds_mld   = xr.open_dataset(mldnc)
 # Convert HFF (1/mon to W/m2 per degC) if needed
 if convert_wm2:
 
-    dshff = dshff.damping * (rho*cp0*ds_mld.h) / dt  *-1 #need to do a check for - value!!
+    dshff = dshff * (rho*cp0*ds_mld.h) / dt  * -1 #need to do a check for - value!!
 else:
     dshff= dshff.damping
 
