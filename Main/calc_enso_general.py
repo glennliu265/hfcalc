@@ -11,7 +11,7 @@ This includes the flux data (non-anomalized )
 The Steps
 
 -------
-Part 1: Preprocess Variables  (Anomalize, Detrend, Flip latitude if needed)
+Part 1: Preprocess Variables  (Fix February start, Anomalize, Detrend, Flip latitude if needed)
 -------
     In   : [time x lat x lon360], li mask applied
     Out  : [time x lat x lon180], detrended, latitude corrected
@@ -34,10 +34,6 @@ Part 3: Remove ENSO component via regression
 -------
     In: 
     
-
-
-
-
 Plots:
     - Plots for each month for a given simulation
 
@@ -96,7 +92,7 @@ overwrite         = False # Skip the file if it already exists
 # Select time crop (prior to preprocessing)
 croptime          = False # Cut the time prior to detrending, EOF, etc
 tstart            =  '0200-01-01' # "2006-01-01" # 
-tend              =  '2000-02-01' #"2101-01-01" # 
+tend              =  '2000-12-31' #"2101-01-01" # 
 
 # Select time crop (for the estimate)
 croptime_estimate = False # Cut time right before estimating the heat flux feedback
@@ -197,6 +193,9 @@ for ensnum in np.arange(1,nens+1):
         else:
             
             da = xr.open_dataset(datpath+"%s_%s.nc" % (dataset_name,v))
+        
+        # Fix February Start
+        da = proc.fix_febstart(da)
         
         # Slice to time period of interest
         if croptime:
