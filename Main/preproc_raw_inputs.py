@@ -5,7 +5,15 @@
 Preprocess Raw Inputs For HFF Calculations/Stochastic Model Parameterizations
 
 
-Given a loader, datasetname, and variables
+Works with
+    - Raw Output (most datasets + variables)
+    - qnet combined through [compute_qnet]
+    - regridded HMXL through [prep_MLD_PIC.py]
+    
+
+Given a loader, datasetname, and variables. Note: Need to write a loader function
+for each dataset, based on the directory and file structure...
+Currently only supports PiControl for CESM1
 
 - Load + concat files
 - Standardize the naming + flip longitude (time x lat x lon)
@@ -21,9 +29,6 @@ Output:
     Name:
     <datname>_<vname>_<bbox_name>_<timestr>.nc in /proc/ directory
     ex. cesm2_pic_LHFLX_NAtl_0200to2000.nc
-    
-    
-    
 
 Created on Fri Jun 21 13:48:22 2024
 

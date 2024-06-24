@@ -23,24 +23,51 @@ import matplotlib.pyplot as plt
 #%% User Edits
 # ------------
 
-# Dataset and path information
-datname     = "cesm2_pic" # Name of dataset (for input and output)
-datpath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/anom/"
-outpath     = datpath # Output Path
-vname_out   = "qnet" # 
-outname     = "%s%s_%s_anom.nc" % (datpath,datname,vname_out)
-print("File will be saved as %s" % outname)
+procname = "cesm2_pic_regioncut"
 
 
-# NC files (can be anomalized, assume **Positive Upwards**, all units [W/m2])
-nc_fsns         = "%s%s_FSNS_anom.nc" % (datpath,datname) # Incoming Shortwave
-nc_flns         = "%s%s_FLNS_anom.nc" % (datpath,datname) # Outgoing Longwave
-nc_shflx        = "%s%s_SHFLX_anom.nc" % (datpath,datname) # Outgoing Sensible Heat Flux
-nc_lhflx        = "%s%s_LHFLX_anom.nc" % (datpath,datname) # Outgoing Latent Heat Flux
-nclist          = [nc_fsns,nc_flns,nc_shflx,nc_lhflx]
-vnames          = ["FSNS","FLNS","SHFLX","LHFLX"] # Shortwave first! Names of variables in netCDFs
+#"cesm2_pic_anom"
+
+# Version (1), Anomalized Flux Components from CESM1
+if procname == "cesm2_pic_anom":
+    # Dataset and path information
+    datname     = "cesm2_pic" # Name of dataset (for input and output)
+    datpath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/anom/"
+    outpath     = datpath # Output Path
+    vname_out   = "qnet" # 
+    outname     = "%s%s_%s_anom.nc" % (datpath,datname,vname_out)
+    print("File will be saved as %s" % outname)
+    
+    # NC files (can be anomalized, assume **Positive Upwards**, all units [W/m2])
+    nc_fsns         = "%s%s_FSNS_anom.nc" % (datpath,datname) # Incoming Shortwave
+    nc_flns         = "%s%s_FLNS_anom.nc" % (datpath,datname) # Outgoing Longwave
+    nc_shflx        = "%s%s_SHFLX_anom.nc" % (datpath,datname) # Outgoing Sensible Heat Flux
+    nc_lhflx        = "%s%s_LHFLX_anom.nc" % (datpath,datname) # Outgoing Latent Heat Flux
+    nclist          = [nc_fsns,nc_flns,nc_shflx,nc_lhflx]
+    vnames          = ["FSNS","FLNS","SHFLX","LHFLX"] # Shortwave first! Names of variables in netCDFs
+
+# Version (2), Region crop full flux fields from [preproc_raw_inputs]
+elif procname == "cesm2_pic_regioncut":
+    # Dataset and path information
+    datname     = "cesm2_pic" # Name of dataset (for input and output)
+    datpath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
+    outpath     = datpath # Output Path
+    vname_out   = "qnet" # 
+    
+    outname     = "%s%s_%s_NAtl_0200to2000.nc" % (datpath,datname,vname_out)
+    print("File will be saved as %s" % outname)
+    
+    # NC files (can be anomalized, assume **Positive Upwards**, all units [W/m2])
+    nc_fsns         = datpath + "cesm2_pic_FSNS_NAtl_0200to2000.nc"  # Incoming Shortwave
+    nc_flns         = datpath + "cesm2_pic_FLNS_NAtl_0200to2000.nc"  # Outgoing Longwave
+    nc_shflx        = datpath + "cesm2_pic_SHFLX_NAtl_0200to2000.nc" # Outgoing Sensible Heat Flux
+    nc_lhflx        = datpath + "cesm2_pic_LHFLX_NAtl_0200to2000.nc" # Outgoing Latent Heat Flux
+    nclist          = [nc_fsns,nc_flns,nc_shflx,nc_lhflx]
+    vnames          = ["FSNS","FLNS","SHFLX","LHFLX"] # Shortwave first! Names of variables in netCDFs
+    
 
 
+#%%
 # Glossary of names to check (later, add CESM1/CESM2, CMIP5, and CMIP6 definitions, etc)
 vname_cmip = ("rsus" ,"rlus" ,"rsds" ,"rlds" ,"hfss" ,"hfls","ts")
 vname_ncep = ("uswrf","ulwrf","dswrf","dlwrf","shtfl","lhtfl","air")
