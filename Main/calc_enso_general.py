@@ -85,7 +85,7 @@ proc.makedir(figpath)
 
 
 # Set Paths
-procpath = datpath + "/anom/"
+anompath = datpath + "/anom/"
 ensopath = datpath + "/enso/"
 hffpath  = datpath + "/hff/"
 maskpath = datpath + "/masks/"
@@ -95,7 +95,7 @@ overwrite         = False # Skip the file if it already exists
 
 # Select time crop (prior to preprocessing)
 croptime          = False # Cut the time prior to detrending, EOF, etc
-tstart            =  '0001-01-01' # "2006-01-01" # 
+tstart            =  '0200-01-01' # "2006-01-01" # 
 tend              =  '2000-02-01' #"2101-01-01" # 
 
 # Select time crop (for the estimate)
@@ -183,7 +183,7 @@ for ensnum in np.arange(1,nens+1):
 
     for v in vnames_in:
             
-        # Open the dataset, slice to time period of interest
+        # Open the dataset ------------------
         if lensflag:
             if dataset_name in ["rcp85", "htr"]:
                 if dataset_name == "rcp85":
@@ -198,8 +198,10 @@ for ensnum in np.arange(1,nens+1):
             
             da = xr.open_dataset(datpath+"%s_%s.nc" % (dataset_name,v))
         
+        # Slice to time period of interest
         if croptime:
             da = da.sel(time=slice(tstart,tend),drop=True)
+            
         
         # Check time, and skip file if it already exists
         # ----------------------------------------------
@@ -208,7 +210,7 @@ for ensnum in np.arange(1,nens+1):
         timestr = "%04ito%04i" % (timesyr[0],timesyr[-1])
         
         # Set Save Name
-        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
+        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
         if lensflag:
             savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         query = glob.glob(savename)
@@ -316,7 +318,7 @@ for ensnum in np.arange(1,nens+1):
     st = time.time()
     
     # Open the dataset
-    savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,vnames_in[0],detrend,timestr)
+    savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,vnames_in[0],detrend,timestr)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
     da = xr.open_dataset(savename)
@@ -327,7 +329,7 @@ for ensnum in np.arange(1,nens+1):
     
     # Check if ENSO has already been calculated and skip if so
     proc.makedir("%senso/"% datpath) 
-    savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.npz" % (datpath,dataset_name,detrend,pcrem,timestr)
+    savename = "%s%s_ENSO_detrend%i_pcs%i_%s.npz" % (ensopath,dataset_name,detrend,pcrem,timestr)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
     query = glob.glob(savename)
@@ -384,7 +386,7 @@ for ensnum in np.arange(1,nens+1):
     allstart = time.time()
     
     # Load ENSO
-    savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.npz" % (datpath,dataset_name,detrend,pcrem,timestr)
+    savename = "%s%s_ENSO_detrend%i_pcs%i_%s.npz" % (ensopath,dataset_name,detrend,pcrem,timestr)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
     ld = np.load(savename,allow_pickle=True)
@@ -393,7 +395,7 @@ for ensnum in np.arange(1,nens+1):
     for v in vnames_in:
         
         # Load Target variable
-        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
+        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
         if lensflag:
             savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         da = xr.open_dataset(savename)
@@ -421,7 +423,7 @@ for ensnum in np.arange(1,nens+1):
             da = proc.numpy_to_da(vout,times,lat,lon,v,savenetcdf=savename)
             
             # Save ENSO component
-            savename = "%senso/%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
+            savename = "%s%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (ensopath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
             if lensflag:
                 savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
             np.savez(savename,**{
@@ -444,9 +446,9 @@ for ensnum in np.arange(1,nens+1):
     for v in vnames_in:
         
         if ensorem:
-            savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
+            savename = "%s%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (ensopath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
         else:
-            savename = "%s%s_%s_manom_detrend%i_%s.nc" % (datpath,dataset_name,v,detrend,timestr)
+            savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
         if lensflag:
             savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         ds       = xr.open_dataset(savename)
@@ -471,7 +473,7 @@ for ensnum in np.arange(1,nens+1):
     # Save heat flux (from hfdamping_mat2nc.py)
     # ----------------------------------------
     outvars  = [damping,crosscorr,autocorr,cov,autocov]
-    datpath_out = "%s/useSST/%s_damping/" % (datpath,v)
+    datpath_out = "%s/useSST/%s_damping/" % (hffpath,v)
     proc.makedir(datpath_out)
     savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s_%scrop.nc" % (datpath_out,dataset_name,ensorem,detrend,timestr,tcrop_fname)
     if lensflag:
