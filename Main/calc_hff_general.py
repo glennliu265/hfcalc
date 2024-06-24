@@ -44,8 +44,10 @@ import amv.proc as hf
 #%% User Edits
 # -------------
 
-
+# Set Path and options
 datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
+overwrite         = False # Set to True to ovewrite
+debug             = True # Set to true for debugging plots
 
 # Indicate Time Crop (for input)
 croptime          = True
@@ -60,11 +62,19 @@ tcrop_end         = "1999-12-31"#'1970-01-01' '2099-12-31'#
 tcrop_fname       = ""
 if croptime_estimate:
     tcrop_fname      = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
+    
+# Indicate bbox crop information
+bbox_name         = "NAtl"
 
 # Variables and Dataset Name
 vnames_in         = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
 dataset_name      = 'cesm2_pic'#'rcp85'
 ensnum            = 1
+
+# These should be unnecessary after preproc_raw_inputs
+lonname = 'lon'
+latname = 'lat'
+tname   = 'time' 
 
 # For these datasets, loop for each ensemble member...
 lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
@@ -80,7 +90,21 @@ elif dataset_name == 'htr': # CESM1 Historical
     nens = 42
 else:
     nens = 1
+    
+    
+#%% Options for each step
 
+# Step 1 (Preprocessing)
+detrend           = 1  # Detrend Method
+    
+# Step 2 (Remove ENSO)
+pcrem             = 3    # PCs calculated
+ensolag           = 1    # Lag between ENSO month and response month in NATL
+reduceyr          = True # Drop years due to ENSO lag
+monwin            = 3    # Window of months to consider
+
+# Step 3 (HFF Calculation)
+ensorem           = True # Set to False to skip ENSO removal step
 
 #%% Set up paths
 
@@ -98,7 +122,9 @@ st_script = time.time()
 for ensnum in np.arange(1,nens+1):
 #for ensnum in np.arange(1,nens+1):
     
+    # -------------------------------------------------------------------------
     # Part 1: Preprocess Variables (Anomalize, Detrend, Flip latitude if needed)
+    # -------------------------------------------------------------------------
     
     """
     
@@ -119,46 +145,28 @@ for ensnum in np.arange(1,nens+1):
         lensflag = True
 
     for v in vnames_in:
-            
-        # Open the dataset ------------------
+        
+        # Load the variable processed by [preproc_raw_inputs], [time x lat x lon180]
+        ncname = "%s%s_%s_%s_%s.nc" % (procpath,dataset_name,v,bbox_name,timestr)
+        da     = xr.open_dataset(ncname) # [Time x Lat x Lon]
+        
         if lensflag:
-            if dataset_name in ["rcp85", "htr"]:
-                if dataset_name == "rcp85":
-                    datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
-                elif dataset_name == "htr":
-                    datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/"
-                da = xr.open_dataset("%sCESM1_%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
-            else:
-                datpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_lens/%s/" % dataset_name
-                da = xr.open_dataset("%s%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
-        else:
+            da = da.sel(ens=ensnum)
             
-            da = xr.open_dataset(procpath+"%s_%s.nc" % (dataset_name,v))
+        # Below section should already be done
+        # # Fix February Start
+        # da = hf.fix_febstart(da)
         
-        # Fix February Start
-        da = proc.fix_febstart(da)
+        # # Slice to time period of interest
+        # if croptime:
+        #     da = da.sel(time=slice(tstart,tend),drop=True)
         
-        # Slice to time period of interest
-        if croptime:
-            da = da.sel(time=slice(tstart,tend),drop=True)
-            
         
-        # Check time, and skip file if it already exists
-        # ----------------------------------------------
-        times   = da[tname].values
-        timestr1 = "%04ito%04i" % (times[0].year,times[-1].year)
-        if timestr != timestr1:
-            print("Cropped to %s. Renaming based on new timestr." % (timestr1))
-            timestr = timestr1
-        # Old version, might need to check fi this approach still works with older files
-        #timesyr = times.astype('datetime64[Y]').astype(int) +1970
-        #timestr = "%04ito%04i" % (timesyr[0],timesyr[-1])
-        
-        # Set Save Name
-        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
+        # Set Save Name (in /anom/ folder)
+        savename_anom = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,dataset_name,v,bbox_name,timestr,detrend)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-        query = glob.glob(savename)
+            savename = hf.addstrtoext(savename_anom,"_ens%02i"%(ensnum),adjust=-1)
+        query = glob.glob(savename_anom)
         
         if (len(query) < 1) or (overwrite == True):
             
@@ -168,6 +176,7 @@ for ensnum in np.arange(1,nens+1):
             invar = da[v].values
             lon   = da[lonname].values
             lat   = da[latname].values
+            times = da[tname].values
             
             print("Data loaded in %.2fs"%(time.time()-st))
             
@@ -187,7 +196,7 @@ for ensnum in np.arange(1,nens+1):
             # Remove monthly anomalies
             # ------------------------
             nmon,nlat,nlon = invar.shape
-            manom,invar = proc.calc_clim(invar,0,returnts=1) # Calculate clim with time in axis 0
+            manom,invar = hf.calc_clim(invar,0,returnts=1) # Calculate clim with time in axis 0
             vanom = invar - manom[None,:,:,:]
             vanom = vanom.reshape(nmon,nlat,nlon) # Reshape back to [time x lat x lon]
         
@@ -201,20 +210,20 @@ for ensnum in np.arange(1,nens+1):
             if lensflag is False:
                 start= time.time()
                 indata = vanom.reshape(nmon,nlat*nlon).T # Transpose to [Space x Time]
-                okdata,knan,okpts = proc.find_nan(indata,1)
+                okdata,knan,okpts = hf.find_nan(indata,1)
                 x = np.arange(0,nmon,1)
                 if detrend == 0:
                     # Compute global weighted average
-                    glomean = proc.area_avg(vanom.transpose(2,1,0),[0,360,-90,90],lon,lat,1)
+                    glomean = hf.area_avg(vanom.transpose(2,1,0),[0,360,-90,90],lon,lat,1)
                     
                     # Regress back to the original data to get the global component
-                    beta,b=proc.regress_2d(glomean,okdata,nanwarn=0)
+                    beta,b=hf.regress_2d(glomean,okdata,nanwarn=0)
                     
                     # Subtract this from the original data
                     okdt = okdata - beta[:,None]
                 else:
                     # Polynomial Detrend
-                    okdt,model = proc.detrend_poly(x,okdata,detrend)
+                    okdt,model = hf.detrend_poly(x,okdata,detrend)
                     if debug:
                         fig,ax=plt.subplots(1,1)
                         ax.scatter(x,okdata[44,:],label='raw')
@@ -228,96 +237,19 @@ for ensnum in np.arange(1,nens+1):
                 data_dt = data_dt.reshape(nmon,nlat,nlon) # Back to [time x lat x lon]
                 
                 # Save the output to same path...
-                da      = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
+                da      = hf.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename_anom)
             else:
                 data_dt = vanom
                 
                 # Save detrended option, if set
                 # -----------------------------
                 
-                da = proc.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename)
+                da = hf.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename_anom)
             # End Skip
         else:
             print("Skipping. Found existing file: %s" % (str(query)))
-        
-    #%% Part 2, Compute ENSO Indices
     
-    # ------------------- -------- General Portion --------------------------------
-    
-    """
-    
-    IN : ncfile, <dataset_name>_<vname>_manom_detrend#.nc
-        Anomalized, detrended ts with landice masked applied
-    
-    OUT : npz file <dataset_name>_ENSO_detrend#_pcs#.npz
-        PC File containing:
-            eofall (ENSO EOF Patterns)          [lon x lat x month x pc]
-            pcall  (ENSO principle components)  [time x month x pc]
-            varexpall (ENSO variance explained) [month x pc]]
-            lon,lat,time,ensobbox variables
-    
-    ex: ncep_ncar_ts_manom_detrend1.nc --> ncep_ncar_ENSO_detrend1_pcs3.npz
-    
-    """
-    
-    st = time.time()
-    
-    # Open the dataset
-    savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,vnames_in[0],detrend,timestr)
-    if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-    da = xr.open_dataset(savename)
-    
-    # Slice to region
-    da = da.sel(lon=slice(bbox[0],bbox[1]),lat=slice(bbox[2],bbox[3]))
-    
-    
-    # Check if ENSO has already been calculated and skip if so
-    proc.makedir("%senso/"% datpath) 
-    savename = "%s%s_ENSO_detrend%i_pcs%i_%s.npz" % (ensopath,dataset_name,detrend,pcrem,timestr)
-    if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
-    query = glob.glob(savename)
-    if (len(query) < 1) or (overwrite == True):
-        # Read out the variables # [time x lat x lon]
-        st        = time.time()
-        invar     = da[vnames_in[0]].values
-        lon       = da[lonname].values
-        lat       = da[latname].values
-        times     = da[tname].values
-        print("Data loaded in %.2fs"%(time.time()-st))
-        
-        # Portion Below is taken from calc_ENSO_PIC.py VV ***********
-        eofall,pcall,varexpall = scm.calc_enso(invar,lon,lat,pcrem,bbox=bbox)
-        
-        # Sanity Check
-        if debug:
-            im = 0
-            ip = 0
-            proj = ccrs.PlateCarree(central_longitude=180)
-            fig,ax = plt.subplots(1,1,subplot_kw={'projection':proj})
-            ax = viz.add_coast_grid(ax,bbox=bbox)
-            pcm = ax.pcolormesh(lon,lat,eofall[:,:,im,ip],vmin=-1,vmax=1,
-                                cmap='cmo.balance',transform=ccrs.PlateCarree())
-            cb = fig.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.055,pad=0.1)
-            cb.set_label("SST Anomaly ($\degree C \sigma_{ENSO}^{-1}$)")
-            ax.set_title("EOF %i, Month %i\n Variance Explained: %.2f" % (ip+1,im+1,varexpall[im,ip]*100)+"%")
-        
-        # Save Output
-        np.savez(savename,**{
-                 'eofs': eofall, # [lon x lat x month x pc]
-                 'pcs': pcall,   # [Year, Month, PC]
-                 'varexp': varexpall,
-                 'lon': lon,
-                 'lat':lat,
-                 'times':times,
-                 'enso_bbox':bbox}
-                )
-        print("Data saved in %.2fs"%(time.time()-st))
-    else:
-        print("Skipping. Found existing file: %s" % (str(query)))
-    # End Skip
-        
+    # -------------------------------------------------------------------------
     #%% Part 3: Calculate the ENSO Component, and remove it.
     # (based on remove_ENSO_PIC.py)
     
@@ -331,25 +263,32 @@ for ensnum in np.arange(1,nens+1):
     allstart = time.time()
     
     # Load ENSO Index
-    savename = "%s%s_ENSO_detrend%i_pcs%i_%s.npz" % (ensopath,dataset_name,detrend,pcrem,timestr)
+    savename_ensoid = "%s%s_ENSO_detrend%i_pcs%i_%s.npz" % (ensopath,dataset_name,detrend,pcrem,timestr)
     if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
-    ld      = np.load(savename,allow_pickle=True)
+        savename_ensoid = hf.addstrtoext(savename_ensoid,"_ens%02i"%(ensnum),adjust=0)
+    query   = glob.glob(savename_ensoid)
+    if len(query) < 1:
+        print("%s not found.\nPlease run [compute_enso_index.py]" % savename_ensoid)
+    ld      = np.load(savename_ensoid,allow_pickle=True)
     ensoid  = ld['pcs'] # [year x  month x pc]
     
+    # Loop by each variable and remove ENSO
     for v in vnames_in:
         
         # Load Target variable
         savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
+            savename = hf.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         da = xr.open_dataset(savename)
         
         # Check if (ENSO index file) already exists, and skip if so.
-        savename = "%s%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (anompath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
+        # ex. cesm2_pic_qnet_NAtl_0200to2000_detrend1_ENSOrem_lag1_pcs3_monwin3.nc
+        savename_ensorem = "%s%s_%s_%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i.nc" % (anompath,dataset_name,v,
+                                                                                   bbox_name,timestr,
+                                                                                   detrend,ensolag,pcrem,monwin)
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-        query    = glob.glob(savename)
+            savename_ensorem = proc.addstrtoext(savename_ensorem,"_ens%02i"%(ensnum),adjust=-1)
+        query    = glob.glob(savename_ensorem)
         if (len(query) < 1) or (overwrite == True):
             # Read out the variables # [time x lat x lon]
             st        = time.time()
@@ -359,19 +298,19 @@ for ensnum in np.arange(1,nens+1):
             times     = da[tname].values
             
             # Remove ENSO
-            vout,ensopattern,times = scm.remove_enso(invar,ensoid,ensolag,monwin,reduceyr=reduceyr,times=times)
+            vout,ensopattern,times = hf.remove_enso(invar,ensoid,ensolag,monwin,reduceyr=reduceyr,times=times)
             
             # Save output variables
             #savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
             # if lensflag:
             #     savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-            da = proc.numpy_to_da(vout,times,lat,lon,v,savenetcdf=savename)
+            da = proc.numpy_to_da(vout,times,lat,lon,v,savenetcdf=savename_ensorem)
             
             # Save ENSO component
-            savename = "%s%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (ensopath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
+            savename_ensocomp = "%s%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (ensopath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
             if lensflag:
-                savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
-            np.savez(savename,**{
+                savename = proc.addstrtoext(savename_ensocomp,"_ens%02i"%(ensnum),adjust=0)
+            np.savez(savename_ensocomp,**{
                 'ensopattern':ensopattern,
                 'lon':lon,
                 'lat':lat}
@@ -391,12 +330,12 @@ for ensnum in np.arange(1,nens+1):
     for v in vnames_in:
         
         if ensorem:
-            savename = "%s%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (ensopath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
+            savename_anom_ld = savename_ensorem
         else:
-            savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
+            savename_anom_ld = savename_anom
         if lensflag:
-            savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-        ds       = xr.open_dataset(savename)
+            savename = proc.addstrtoext(savename_anom_ld,"_ens%02i"%(ensnum),adjust=-1)
+        ds       = xr.open_dataset(savename_anom_ld)
         
         lat = ds.lat.values
         lon = ds.lon.values
