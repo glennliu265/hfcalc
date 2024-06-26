@@ -276,10 +276,10 @@ for ensnum in np.arange(1,nens+1):
     for v in vnames_in:
         
         # Load Target variable
-        savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
+        savename_anom = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,dataset_name,v,bbox_name,timestr,detrend)
         if lensflag:
-            savename = hf.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-        da = xr.open_dataset(savename)
+            savename_anom = hf.addstrtoext(savename_anom,"_ens%02i"%(ensnum),adjust=-1)
+        da = xr.open_dataset(savename_anom)
         
         # Check if (ENSO index file) already exists, and skip if so.
         # ex. cesm2_pic_qnet_NAtl_0200to2000_detrend1_ENSOrem_lag1_pcs3_monwin3.nc
@@ -304,12 +304,12 @@ for ensnum in np.arange(1,nens+1):
             #savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
             # if lensflag:
             #     savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
-            da = proc.numpy_to_da(vout,times,lat,lon,v,savenetcdf=savename_ensorem)
+            da = hf.numpy_to_da(vout,times,lat,lon,v,savenetcdf=savename_ensorem)
             
             # Save ENSO component
             savename_ensocomp = "%s%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (ensopath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
             if lensflag:
-                savename = proc.addstrtoext(savename_ensocomp,"_ens%02i"%(ensnum),adjust=0)
+                savename_ensocomp = proc.addstrtoext(savename_ensocomp,"_ens%02i"%(ensnum),adjust=0)
             np.savez(savename_ensocomp,**{
                 'ensopattern':ensopattern,
                 'lon':lon,
@@ -330,11 +330,14 @@ for ensnum in np.arange(1,nens+1):
     for v in vnames_in:
         
         if ensorem:
-            savename_anom_ld = savename_ensorem
+            savename_anom_ld = "%s%s_%s_%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i.nc" % (anompath,dataset_name,v,
+                                                                                       bbox_name,timestr,
+                                                                                       detrend,ensolag,pcrem,monwin)
+            
         else:
-            savename_anom_ld = savename_anom
+            savename_anom_ld = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,dataset_name,v,bbox_name,timestr,detrend)
         if lensflag:
-            savename = proc.addstrtoext(savename_anom_ld,"_ens%02i"%(ensnum),adjust=-1)
+            savename = hf.addstrtoext(savename_anom_ld,"_ens%02i"%(ensnum),adjust=-1)
         ds       = xr.open_dataset(savename_anom_ld)
         
         lat = ds.lat.values
@@ -344,24 +347,29 @@ for ensnum in np.arange(1,nens+1):
         if croptime_estimate:
             ds = ds.sel(time=slice(tcrop_start,tcrop_end),drop=True)
         
-        loadvar = ds[v].values
+        loadvar         = ds[v].values
         ntime,nlat,nlon = loadvar.shape
-        loadvar = loadvar.reshape(int(ntime/12),12,nlat,nlon)
+        loadvar         = loadvar.reshape(int(ntime/12),12,nlat,nlon)
         
         invars.append(loadvar)
     
     #% Calculate heat flux
     sst,flx = invars
-    damping,autocorr,crosscorr,autocov,cov = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=True,return_cov=True)
+    damping,autocorr,crosscorr,autocov,cov = hf.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=True,return_cov=True)
     
     # Save heat flux (from hfdamping_mat2nc.py)
     # ----------------------------------------
     outvars  = [damping,crosscorr,autocorr,cov,autocov]
-    datpath_out = "%s/useSST/%s_damping/" % (hffpath,v)
-    proc.makedir(datpath_out)
-    savename = "%s%s_hfdamping_ensorem%i_detrend%i_%s_%scrop.nc" % (datpath_out,dataset_name,ensorem,detrend,timestr,tcrop_fname)
+    datpath_out = "%s/%s_damping/" % (hffpath,v)
+    hf.makedir(datpath_out)
+    savename = "%s%s_hfdamping_%s_%s_ensorem%i_detrend%i.nc" % (datpath_out,dataset_name,
+                                                                          bbox_name,timestr,
+                                                                          ensorem,detrend)
+    if croptime_estimate:
+        savename = hf.addstrtoext(savename,"_%scrop" % tcrop_fname,adjust=-1)
+        
     if lensflag:
-        savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
+        savename = hf.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
     dims     = {'month'  :np.arange(1,13,1),
                   "lag"  :np.arange(1,4,1),
                   "lat"  :lat,
@@ -414,39 +422,7 @@ for ensnum in np.arange(1,nens+1):
     
     #%% Save 
     if debug: # Plot seasonal cycle
-        il = 0
-        proj = ccrs.PlateCarree()
-        fig,axs = plt.subplots(4,3,subplot_kw={'projection':proj},
-                               figsize=(12,12),constrained_layout=True)
-        
-        
-        plotmon = np.roll(np.arange(0,12),1)
-        
-        for im in range(12):
-            
-            monid = plotmon[im]
-            
-            ax = axs.flatten()[im]
-            plotvar = damping[monid,il,:,:]
-            lon1,plotvar1 = proc.lon360to180(lon,(plotvar.T)[...,None])
-            
-            blabel=[0,0,0,0]
-            if im%3 == 0:
-                blabel[0] = 1
-            if im>8:
-                blabel[-1] = 1
-            
-            ax = viz.add_coast_grid(ax,bbox=[-80,0,-10,62],fill_color='gray',
-                                    blabels=blabel,ignore_error=True)
-            pcm = ax.contourf(lon1,lat,plotvar1.squeeze().T*-1,levels = np.arange(-50,55,5),extend='both',
-                                cmap='cmo.balance')
-            
-            viz.label_sp(monid+1,usenumber=True,alpha=0.7,ax=ax,labelstyle="mon%s")
-        
-        cb = fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.035,pad=0.05)
-        cb.set_label("$\lambda_a$ : $W m^{2} \lambda_a$ ($\degree C ^{-1}$)")
-        plt.suptitle("Heat Flux Damping For %s \n Enso Removed: %s | Lag: %i" % (dataset_name,ensorem,il+1))
-        plt.savefig("%sNHFLX_damping_lag%i_%s_detrend%i_%s.png" % (figpath,il+1,dataset_name,detrend,timestr),dpi=150)
+    
 print("Script Ran to Completion in %.2fs"%(time.time()-st_script))
 #%%
 
