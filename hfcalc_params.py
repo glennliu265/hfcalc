@@ -12,6 +12,19 @@ Created on Thu Feb  1 13:44:49 2024
 """
 
 import numpy as np
+import cartopy.crs as ccrs
+
+
+#%% Cropping Information
+
+
+
+# Plotting Information ( Copied from predict_amv_params)
+proj          = ccrs.PlateCarree()
+bbox          = [-80,0,0,65]
+plotbbox      = [-80,0,0,62]   # Plotting extent
+amvbbox       = [-80,0,0,65]   # AMV Calculation box
+bbox_crop     = [-90,20,0,90]  # Preprocessing box
 
 #%% Degrees of Freedom  for a Simulation (assuming independent data)
 
@@ -45,7 +58,7 @@ hparam2 = {
     'ensolag' : 1,      # Lag Applied toENSO and Variable before removal
     'monwin'  : 3,      # Size of month window for HFF calculations
     'detrend' : 1,      # Whether or not variable was detrended
-    'tails'   : 2,      # tails for t-test
+    'tails'   : 2,      # ta)ils for t-test
     'p'       : 0.05,   # p-value for significance testing
     'sellags' : [0,],   # Lags included (indices, so 0=lag1)
     'lagstr'  : "lag1", # Name of lag based on sellags
@@ -65,9 +78,22 @@ hparam3 = {
     'method'  : 1       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
     }
 
+hname4 = "CESM2PiCqnetDamp" # cesm2_pic damping (years 200-2000), lag 1
+hparam4 = {
+    'ensorem' : 1,      # 1=enso removed, 0=not removed
+    'ensolag' : 1,      # Lag Applied toENSO and Variable before removal
+    'monwin'  : 3,      # Size of month window for HFF calculations
+    'detrend' : 1,      # Whether or not variable was detrended
+    'tails'   : 2,      # tails for t-test
+    'p'       : 1.00,   # p-value for significance testing
+    'sellags' : [0,],   # Lags included (indices, so 0=lag1)
+    'lagstr'  : "lag1", # Name of lag based on sellags
+    'method'  : 1       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
+    }
+
 # Combine and make the dictionaries
-hff_names = [hname1,hname2,hname3,]
-hff_dicts = [hparam1,hparam2,hparam3,]
+hff_names = [hname1,hname2,hname3,hname4,]
+hff_dicts = [hparam1,hparam2,hparam3,hparam4,]
 hff_sets  = dict(zip(hff_names,hff_dicts))
 
 #%%
