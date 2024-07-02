@@ -90,7 +90,6 @@ latname             = "lat"
 timename            = "time"
 concat_dim          = "ens" #"time"
 keepvars            = [timename,latname,lonname,vname]
-lensflag            = False
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
 detrend             = 1 # 1 to remove linear trend 
 
