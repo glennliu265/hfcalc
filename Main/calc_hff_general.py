@@ -10,7 +10,6 @@ Currently runs on Astraeus. Will modify for more flexibilityin the future
 
 Inputs
 
-
     Region/Time-Cropped Flux and TS [time x (ens) x lat x lon180] : from [preproc_raw_inputs], located in datpath + proc/
     ENSO Index (for ENSO removal): from [compute_enso_index], located in datpath + enso/
 
@@ -51,8 +50,8 @@ debug             = True # Set to true for debugging plots
 
 # Indicate Time Crop (for input)
 croptime          = True
-tstart            =  '0200-01-01' # "2006-01-01" # 
-tend              =  '2000-12-31' #"2101-01-01" # 
+tstart            =  '1920-01-01'#'0200-01-01' # "2006-01-01" # 
+tend              =  '2005-12-31'#'2000-12-31' #"2101-01-01" # 
 timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
 
 # Select time crop (for the estimate)
@@ -61,20 +60,21 @@ tcrop_start       = "1970-01-01"#'1920-01-01' '2070-01-01'#
 tcrop_end         = "1999-12-31"#'1970-01-01' '2099-12-31'#
 tcrop_fname       = ""
 if croptime_estimate:
-    tcrop_fname      = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
+    tcrop_fname     = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
     
 # Indicate bbox crop information
-bbox_name         = "NAtl"
+bbox_name           = "Global"#"NAtl"
 
 # Variables and Dataset Name
-vnames_in         = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
-dataset_name      = 'cesm2_pic'#'rcp85'
-ensnum            = 1
+vnames_in           = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+dataset_name        = 'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
+ensnum              = 42
+lensflag            = True
 
 # These should be unnecessary after preproc_raw_inputs
-lonname = 'lon'
-latname = 'lat'
-tname   = 'time' 
+lonname             = 'lon'
+latname             = 'lat'
+tname               = 'time' 
 
 # For these datasets, loop for each ensemble member...
 lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
@@ -87,6 +87,8 @@ elif dataset_name in ('gfdl_esm2m_lens', "csiro_mk36_lens"):
 elif dataset_name == 'canesm2_lens':
     nens = 50
 elif dataset_name == 'htr': # CESM1 Historical
+    nens = 42
+elif "cesm1_htr" in dataset_name:
     nens = 42
 else:
     nens = 1
@@ -139,33 +141,41 @@ for ensnum in np.arange(1,nens+1):
     
     """
     
-    # Set lensflag
-    lensflag = False
-    if dataset_name in lens_datasets:
-        lensflag = True
-
     for v in vnames_in:
         
         # Load the variable processed by [preproc_raw_inputs], [time x lat x lon180]
         ncname = "%s%s_%s_%s_%s.nc" % (procpath,dataset_name,v,bbox_name,timestr)
         da     = xr.open_dataset(ncname) # [Time x Lat x Lon]
         
-        if lensflag:
-            da = da.sel(ens=ensnum)
-            
         # Below section should already be done
-        # # Fix February Start
-        # da = hf.fix_febstart(da)
+        # Fix February Start
+        da = hf.fix_febstart(da)
         
-        # # Slice to time period of interest
-        # if croptime:
-        #     da = da.sel(time=slice(tstart,tend),drop=True)
+        # Slice to time period of interest
+        if croptime:
+            da = da.sel(time=slice(tstart,tend),drop=True)
         
+        
+        if lensflag:
+            # Compute Ensemble average for calculations later
+            eavg_fname  = hf.addstrtoext(ncname,"_ensavg",adjust=-1)
+            query = glob.glob(eavg_fname)
+            if (len(query) < 1) or (overwrite == True):
+                print("Computing ensemble average for %s..." % v)
+                ensavg      = da.mean('ens')
+                edict       = hf.make_encoding_dict(ensavg)
+                ensavg.to_netcdf(eavg_fname,encoding=edict)
+            
+            
+            
+            # Select just 1 ensemble member
+            da     = da.sel(ens=ensnum)
         
         # Set Save Name (in /anom/ folder)
         savename_anom = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,dataset_name,v,bbox_name,timestr,detrend)
         if lensflag:
-            savename = hf.addstrtoext(savename_anom,"_ens%02i"%(ensnum),adjust=-1)
+            savename_anom = hf.addstrtoext(savename_anom,"_ens%02i"%(ensnum),adjust=-1)
+        
         query = glob.glob(savename_anom)
         
         if (len(query) < 1) or (overwrite == True):
@@ -182,16 +192,17 @@ for ensnum in np.arange(1,nens+1):
             
             # For LENs case, remove ensavg
             # ----------------------------
-            if lensflag:
+            if lensflag and detrend:
+                
                 if dataset_name in ["rcp85", "htr"]:
                     eavg_fname  = "%sCESM1_%s_%s_ensAVG.nc" % (datpath,dataset_name,v)
                 else:
-                    eavg_fname  = "%s%s_%s_ensAVG.nc" % (datpath,dataset_name,v)
-                ensavg      = xr.open_dataset(eavg_fname)
+                    eavg_fname  = hf.addstrtoext(ncname,"_ensavg",adjust=-1)
+                print("Removing ensemble average, loading from %s" % eavg_fname)
+                ensavg      = xr.open_dataset(eavg_fname).load()
                 ensavg      = ensavg.sel(time=slice(tstart,tend),drop=True)
                 ensavg      = ensavg[v].values
-                
-                invar = invar - ensavg
+                invar       = invar - ensavg
                 
             # Remove monthly anomalies
             # ------------------------
@@ -239,11 +250,11 @@ for ensnum in np.arange(1,nens+1):
                 # Save the output to same path...
                 da      = hf.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename_anom)
             else:
+                # Ensemble average was removed earlier...
                 data_dt = vanom
                 
                 # Save detrended option, if set
                 # -----------------------------
-                
                 da = hf.numpy_to_da(data_dt,times,lat,lon,v,savenetcdf=savename_anom)
             # End Skip
         else:
@@ -263,14 +274,16 @@ for ensnum in np.arange(1,nens+1):
     allstart = time.time()
     
     # Load ENSO Index
-    savename_ensoid = "%s%s_ENSO_detrend%i_pcs%i_%s.npz" % (ensopath,dataset_name,detrend,pcrem,timestr)
-    if lensflag:
-        savename_ensoid = hf.addstrtoext(savename_ensoid,"_ens%02i"%(ensnum),adjust=0)
+    savename_ensoid = "%s%s_ENSO_detrend%i_pcs%i_%s.nc" % (ensopath,dataset_name,detrend,pcrem,timestr)
+    # if lensflag:
+    #     savename_ensoid = hf.addstrtoext(savename_ensoid,"_ens%02i"%(ensnum),adjust=0)
     query   = glob.glob(savename_ensoid)
     if len(query) < 1:
         print("%s not found.\nPlease run [compute_enso_index.py]" % savename_ensoid)
-    ld      = np.load(savename_ensoid,allow_pickle=True)
-    ensoid  = ld['pcs'] # [year x  month x pc]
+    ld      = xr.open_dataset(savename_ensoid)#np.load(savename_ensoid,allow_pickle=True)
+    ensoid  = ld.pcs#['pcs'] # [year x  month x pc]
+    if lensflag:
+        ensoid = ensoid.sel(ens=ensnum)
     
     # Loop by each variable and remove ENSO
     for v in vnames_in:
@@ -287,7 +300,7 @@ for ensnum in np.arange(1,nens+1):
                                                                                    bbox_name,timestr,
                                                                                    detrend,ensolag,pcrem,monwin)
         if lensflag:
-            savename_ensorem = proc.addstrtoext(savename_ensorem,"_ens%02i"%(ensnum),adjust=-1)
+            savename_ensorem = hf.addstrtoext(savename_ensorem,"_ens%02i"%(ensnum),adjust=-1)
         query    = glob.glob(savename_ensorem)
         if (len(query) < 1) or (overwrite == True):
             # Read out the variables # [time x lat x lon]
@@ -309,7 +322,7 @@ for ensnum in np.arange(1,nens+1):
             # Save ENSO component
             savename_ensocomp = "%s%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.npz" % (ensopath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
             if lensflag:
-                savename_ensocomp = proc.addstrtoext(savename_ensocomp,"_ens%02i"%(ensnum),adjust=0)
+                savename_ensocomp = hf.addstrtoext(savename_ensocomp,"_ens%02i"%(ensnum),adjust=0)
             np.savez(savename_ensocomp,**{
                 'ensopattern':ensopattern,
                 'lon':lon,
@@ -337,7 +350,7 @@ for ensnum in np.arange(1,nens+1):
         else:
             savename_anom_ld = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,dataset_name,v,bbox_name,timestr,detrend)
         if lensflag:
-            savename = hf.addstrtoext(savename_anom_ld,"_ens%02i"%(ensnum),adjust=-1)
+            savename_anom_ld = hf.addstrtoext(savename_anom_ld,"_ens%02i"%(ensnum),adjust=-1)
         ds       = xr.open_dataset(savename_anom_ld)
         
         lat = ds.lat.values
@@ -420,8 +433,6 @@ for ensnum in np.arange(1,nens+1):
              encoding=encoding_dict)
     print("Saved in %.2fs" % (time.time()-st))
     
-    #%% Save 
-    if debug: # Plot seasonal cycle
     
 print("Script Ran to Completion in %.2fs"%(time.time()-st_script))
 #%%
