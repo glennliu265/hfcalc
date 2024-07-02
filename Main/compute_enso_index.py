@@ -64,9 +64,9 @@ import amv.proc as hf # Update hf with actual hfutils script, most relevant func
 #%% ENSO Calculation and Cropping Options
 
 # Select time crop (prior to preprocessing)
-croptime          = False # Cut the time prior to detrending, EOF, etc
-tstart            =  '0001-01-01' # "2006-01-01" # 
-tend              =  '2000-02-01' #"2101-01-01" # 
+croptime          = True # Cut the time prior to detrending, EOF, etc
+tstart            =  '1920-01-01'#'0001-01-01' # "2006-01-01" # 
+tend              =  '2005-12-31'#'2000-02-01' # "2101-01-01" # 
 timestr           = "%sto%s" % (tstart[:4],tend[:4])
 
 # ENSO Parameters
@@ -82,12 +82,13 @@ debug            = True # Debug toggle
 # Example provided below here is for CESM1
 
 # Data Information
-dataset_name        = "cesm2_pic"
-datpath             = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/"
+dataset_name        = 'cesm1_htr_5degbilinear'#"cesm2_pic"
+datpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"#"/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/"
 vname               = "TS"
 lonname             = "lon"
 latname             = "lat"
 timename            = "time"
+concat_dim          = "ens" #"time"
 keepvars            = [timename,latname,lonname,vname]
 lensflag            = False
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
@@ -95,7 +96,7 @@ detrend             = 1 # 1 to remove linear trend
 
 # Mask Information (first run a maskmaker script/section such as that in preproc_CESM2_PiControl.py)
 maskpath            = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/"
-maskname            = "cesm2_pic_limask_0.3p_0.05p.nc"
+maskname            = 'cesm1_htr_5degbilinear_limask_0.3p_0.05p_year1920to2005_enssum.nc'#"cesm2_pic_limask_0.3p_0.05p.nc"
 
 # Output Path (Checks for an "enso" folder)
 outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
@@ -105,13 +106,17 @@ outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdampi
 # 1A. Load Variable ----------
 
 # Create filename/list and load 
-searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
+if dataset_name == "cesm2_pic":
+    searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
+else:
+    searchstr = "%s%s*%s*.nc" % (datpath,dataset_name,vname) # Searches for datpath + dataset_name*LANDFRAC*.nc"
 nclist    = glob.glob(searchstr)
 nclist.sort()
 print("Found %i files for %s" % (len(nclist),vname))
 
 # Drop Unnecessary variables
-ds_all    = xr.open_mfdataset(nclist,concat_dim="time",combine='nested')
+print("Concatenating files by dim <%s>" % (concat_dim))
+ds_all    = xr.open_mfdataset(nclist,concat_dim=concat_dim,combine='nested')
 ds_all    = hf.ds_dropvars(ds_all,keepvars)
 ds_all    = hf.fix_febstart(ds_all)
 
@@ -127,6 +132,13 @@ mask = xr.open_dataset(maskpath+maskname).mask.load()
 ds_all = ds_all * mask
 print("Mask applied in %.2fs" % (time.time()-st))
 
+
+# Set ensemble flag
+lensflag = False
+if 'ens' in list(ds_all.dims):
+    print("Ensemble dimension detected!")
+    lensflag = True
+    
 
 #%% 2. Preprocessing
 
@@ -146,14 +158,28 @@ print("Output Loaded in %.2fs" % (time.time()-st))
 
 # Remove seasonal cycle
 ds_anom  = hf.xrdeseason(dsreg)
-ds_anom   = ds_anom.transpose('time','lat','lon')
+
 
 # Remove Trend if option is set
 if detrend:
-    dt_dict   = hf.detrend_dim(ds_anom.values,0,return_dict=True)# ASSUME TIME in first axis
+    
+    if 'ens' in list(ds_anom.dims):
+        print("Detrending by removing ensemble mean")
+        # Detrend by removing ensemble average
+        da = ds_anom - ds_anom.mean('ens')
+        
+        da = da.transpose('ens','time','lat','lon')
+        
+    else:
+        print("Detrending by removing linear fit")
+        ds_anom   = ds_anom.transpose('time','lat','lon')
+        
+        # Simple Linear Detrend
+        dt_dict   = hf.detrend_dim(ds_anom.values,0,return_dict=True)# ASSUME TIME in first axis
 
-    # Put back into DataArray
-    da = xr.DataArray(dt_dict['detrended_var'],dims=ds_anom.dims,coords=ds_anom.coords,name=vname)
+        # Put back into DataArray
+        da = xr.DataArray(dt_dict['detrended_var'],dims=ds_anom.dims,coords=ds_anom.coords,name=vname)
+
 else:
     da = ds_anom.copy()
 
@@ -173,7 +199,7 @@ IN : ncfile, <dataset_name>_<vname>_manom_detrend#.nc
 OUT : npz file <dataset_name>_ENSO_detrend#_pcs#.npz
     PC File containing:
         eofall (ENSO EOF Patterns)          [lon x lat x month x pc]
-        pcall  (ENSO principle components)  [time x month x pc]
+        pcall  (ENSO principle components)  [(ens) x time x month x pc]
         varexpall (ENSO variance explained) [month x pc]]
         lon,lat,time,ensobbox variables
 
@@ -195,12 +221,12 @@ st = time.time()
 # Check if ENSO has already been calculated and skip if so
 proc.makedir("%senso/"% datpath) 
 savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.nc" % (outpath,dataset_name,detrend,pcrem,timestr)
-if lensflag:
-    savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
+# if lensflag:
+#     savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
 query = glob.glob(savename)
 if (len(query) < 1) or (overwrite == True):
     
-    # Read out the variables # [time x lat x lon]
+    # Read out the variables # [(ens) x time x lat x lon]
     st        = time.time()
     invar     = da.values
     lon       = da[lonname].values
@@ -208,8 +234,29 @@ if (len(query) < 1) or (overwrite == True):
     times     = da[timename].values
     print("Data loaded in %.2fs"%(time.time()-st))
     
-    # Portion Below is taken from calc_ENSO_PIC.py VV ***********
-    eofall,pcall,varexpall = scm.calc_enso(invar,lon,lat,pcrem,bbox=bbox)
+    if lensflag:
+        nens = len(da.ens)
+        
+        eofall_ens      = []
+        pcall_ens       = []
+        varexpall_ens   = []
+        for e in range(nens):
+            invar_ens              = invar[e,...]
+            # Portion Below is taken from calc_ENSO_PIC.py VV ***********
+            eofall,pcall,varexpall = scm.calc_enso(invar_ens,lon,lat,pcrem,bbox=bbox)
+            
+            eofall_ens.append(eofall.copy())
+            pcall_ens.append(pcall.copy())
+            varexpall_ens.append(varexpall.copy())
+        
+        
+        eofall    = np.array(eofall_ens)
+        pcall     = np.array(pcall_ens)
+        varexpall = np.array(varexpall_ens)
+        
+    else:
+        # Portion Below is taken from calc_ENSO_PIC.py VV ***********
+        eofall,pcall,varexpall = scm.calc_enso(invar,lon,lat,pcrem,bbox=bbox)
     
     # Sanity Check
     if debug:
@@ -218,7 +265,12 @@ if (len(query) < 1) or (overwrite == True):
         proj = ccrs.PlateCarree(central_longitude=180)
         fig,ax = plt.subplots(1,1,subplot_kw={'projection':proj})
         ax = viz.add_coast_grid(ax,bbox=bbox)
-        pcm = ax.pcolormesh(lon,lat,eofall[:,:,im,ip],vmin=-1,vmax=1,
+        if lensflag:
+            plotvar = eofall[0,:,:,im,ip]
+        else:
+            plotvar = eofall[:,:,im,ip]
+            
+        pcm = ax.pcolormesh(lon,lat,plotvar,vmin=-1,vmax=1,
                             cmap='cmo.balance',transform=ccrs.PlateCarree())
         cb = fig.colorbar(pcm,ax=ax,orientation='horizontal',fraction=0.055,pad=0.1)
         cb.set_label("SST Anomaly ($\degree C \sigma_{ENSO}^{-1}$)")
@@ -227,16 +279,24 @@ if (len(query) < 1) or (overwrite == True):
     if save_netcdf:
         
         mons    = np.arange(1,13,1)
-        years   = np.arange(pcall.shape[0])
+        
+        years   = np.arange(int(len(times)/12))
         pcnums  = np.arange(1,pcrem+1)
         
+        
+        
+        # Make Dictionary
         coords_eofs   = dict(lat=lat,lon=lon,month=mons,pc=pcnums) # 
-        da_eofs       = xr.DataArray(eofall,coords=coords_eofs,dims=coords_eofs,name='eofs')
-        
         coords_pcs    = dict(year=years,month=mons,pc=pcnums)
-        da_pcs        = xr.DataArray(pcall,coords=coords_pcs,dims=coords_pcs,name='pcs')
-        
         coords_varexp = dict(month=mons,pc=pcnums)
+        if lensflag:
+            ens     = np.arange(1,nens+1,1)
+            # Unpack and repack dict to append item to start # https://www.geeksforgeeks.org/python-append-items-at-beginning-of-dictionary/
+            coords_eofs,coords_pcs,coords_varexp = [{**{'ens':ens},**dd} for dd in [coords_eofs,coords_pcs,coords_varexp]]
+        
+        
+        da_eofs       = xr.DataArray(eofall,coords=coords_eofs,dims=coords_eofs,name='eofs')
+        da_pcs        = xr.DataArray(pcall,coords=coords_pcs,dims=coords_pcs,name='pcs')
         da_varexp     = xr.DataArray(varexpall,coords=coords_varexp,dims=coords_varexp,name='varexp')
         
         # Merge everything
@@ -253,7 +313,7 @@ if (len(query) < 1) or (overwrite == True):
         
         # Save Output
         np.savez(savename,**{
-                 'eofs': eofall, # [lon x lat x month x pc]
+                 'eofs': eofall, # [(ens) x lon x lat x month x pc]
                  'pcs': pcall,   # [Year, Month, PC]
                  'varexp': varexpall,
                  'lon': lon,
