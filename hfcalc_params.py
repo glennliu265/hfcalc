@@ -106,7 +106,7 @@ hparam5 = {
 
 # Combine and make the dictionaries
 hff_names = [hname1,hname2,hname3,hname4,hname5,]
-hff_dicts = [hparam1,hparam2,hparam3,hparam4,hname5]
+hff_dicts = [hparam1,hparam2,hparam3,hparam4,hparam5]
 hff_sets  = dict(zip(hff_names,hff_dicts))
 
 #%%
