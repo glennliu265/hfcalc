@@ -70,11 +70,13 @@ sys.path.append(amvpath)
 import amv.proc as hf
 
 
+
 #%% Set Paths
 
-Eprime     = False # Set to True to Compute E' instead of F'
+# Note: For Eprime computation, just switch to the correct flux and damping!
+#Eprime     = False # Set to True to Compute E' instead of F'
 
-stormtrack = 0
+stormtrack   = 1
 
 # # Path to variables processed by prep_data_byvariable_monthly, Output will be saved to rawpath1
 # if stormtrack:
@@ -86,43 +88,44 @@ stormtrack = 0
 #     mldpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/model_input/mld/"
 #     dpath    = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/model_input/damping/"
 
-
 # Indicate inputs
-datname = "cesm2_pic"
+datname      = "cesm1le_htr_5degbilinear"
+lensflag     = True # Set to True for lens datasets/to detrend with ensemble average
+outvar       = "Fprime"  # "Set to Fprime by default, but LHFLX for Eprime calculations..."
+outpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
 
 # Mixed Layer Depth --> [h: time x lat x lon180]
 mldpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/mld/"
-mldnc        = "cesm2_pic_HMXL_NAtl_0200to2000.nc"
+mldnc        = "cesm1_htr_5degbilinear_HMXL_Global_1920to2005.nc"#"cesm1_htr_5degbilinear_HMXL_Global_1920to2005.nc"
 mldname      = "h"
 
 # Net Heat Flux (Positive Upwards) --> [qnet: time x lat x lon180]
 flxpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
-flxnc        = "cesm2_pic_qnet_NAtl_0200to2000.nc"
+flxnc        = "cesm1_htr_5degbilinear_qnet_Global_1920to2005.nc"
 flxname      = 'qnet'
 
 # SST
 sstpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
-sstnc        = "cesm2_pic_TS_NAtl_0200to2000.nc"
+sstnc        = "cesm1_htr_5degbilinear_TS_Global_1920to2005.nc"
 sstname      = 'TS'
 
 # Damping 
 damppath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/qnet_damping/"
-dampnc       = "cesm2_pic_hfdamping_NAtl_0200to2000_ensorem1_detrend1.nc"
+dampnc       = "cesm1_htr_5degbilinear_hfdamping_Global_1920to2005_ensorem1_detrend1.nc"
 dampname     = 'qnet_damping'
 ilag         = 0 # Indicate which lag to select
 
 # Damping Information and roll options
-dampstr     = "CESM2PiCqnetDamp"
-nroll       = 0 # Amount to roll lbd*T' term
-rollstr     = "nroll%0i"  % nroll
-convert_wm2 = True # Convert hff to wm2
+dampstr      = "cesm1le5degqnet"
+nroll        = 0 # Amount to roll lbd*T' term
+rollstr      = "nroll%0i"  % nroll
+convert_wm2  = False # Convert hff to wm2
 
 # Conversion Factors
-dt  = 3600*24*30
-cp0 = 3996
-rho = 1026
+dt          = 3600*24*30
+cp0         = 3996
+rho         = 1026
 
-lensflag    = True # Set to True to detrend with ensemble average
 
 #%% Functions
 def format_ds_mon(ds):
@@ -166,14 +169,14 @@ ds_anom  = [hf.xrdeseason(ds) for ds in ds_load]
 # Detrend
 if lensflag:
     print("Detrending by removing ensemble mean")
-    ds_dt    = [ds-ds.mean('ensemble') for ds in ds_anom] # [ens x time x lat x lon]
-    ds_dt    = [ds.transpose('time','ensemble','lat','lon') for ds in ds_dt]
+    ds_dt    = [ds-ds.mean('ens') for ds in ds_anom] # [ens x time x lat x lon]
+    ds_dt    = [ds.transpose('time','ens','lat','lon') for ds in ds_dt]
 else:
     print("Applying Simple Linear Detrend")
     ds_dt    = [hf.xrdetrend(ds) for ds in ds_anom]
     ds_dt    = [ds.transpose('time','lat','lon') for ds in ds_dt]
     ds_dt    = [format_ds_mon(ds) for ds in ds_dt]
-    
+
 # -----------------------------------------------------------------------------
 #%% Part 2: Load Damping/MLD and Convert HFF
 # -----------------------------------------------------------------------------
@@ -183,190 +186,242 @@ dshff    = xr.open_dataset(damppath + dampnc)[dampname]      # [mon x (lag) x (e
 if "lag" in list(dshff.dims):
     dshff = dshff.isel(lag=ilag)
     print("Selecting lag %i for heat flux feedback" % dshff.lag)
-    
-# Load mixed layer depth for conversion from [calc_hclim.py] # [mon x lat x lon]
-ds_mld   = xr.open_dataset(mldpath + mldnc)[mldname]
 
+
+if lensflag:
+    dshff = dshff.transpose('month','ens','lat','lon')
+
+# Load mixed layer depth for conversion from [calc_hclim.py] # [mon x lat x lon]
+ds_mld                  = xr.open_dataset(mldpath + mldnc)[mldname]
+
+
+dshff,ds_mld            = [format_ds_mon(ds) for ds in [dshff,ds_mld]]
 
 # Double Check the Sizes
-ds_in   = ds_dt + [dshff,ds_mld]
-ds_in   = hf.resize_ds(ds_in)
-sst,qnet,dshff,ds_mld = ds_in
+ds_in                   = ds_dt + [dshff,ds_mld]
+ds_in                   = hf.resize_ds(ds_in)
+sst,qnet,dshff,ds_mld   = ds_in
 
 # Convert HFF (1/mon to W/m2 per degC) if needed
 if convert_wm2:
     print("Converting to Wm2")
-    dshff = dshff * (rho*cp0*ds_mld) / dt  *-1 #need to do a check for - value!!
+    dshff = dshff * (rho*cp0*ds_mld) / dt  * -1 #need to do a check for - value!!
 else:
-    dshff= dshff
+    dshff = dshff
 
 # Load output to numpy
 hff     = dshff.values
 sst     = sst.values
 qnet    = qnet.values
 
-#%%
-
-#%%
-# Indicate Search String for qnet/SST files ------d
-ncstr1   = "CESM1LE_%s_NAtl_19200101_20050101_bilinear.nc"
-
-# Indicate Mixed-Layer Depth File
-mldnc    = "%sCESM1_HTR_FULL_HMXL_NAtl.nc" % mldpath
-
-# Fprime Calculation Options
-nroll    = 0
-
-
-# Damping Options ----------
-dampstr = "LHFLXnomasklag1" # Damping String  (see below, "load damping of choice")
-"""
-Current List of Damping Strings
--- Name             -- ncfile                                               -- Description
-"nomasklag1"        "CESM1_HTR_FULL_qnet_damping_nomasklag1.nc"             Default Qnet Damping as calculated from covariance-based method.
-"Expfitlbda123"     "CESM1_HTR_FULL_Expfit_lbda_damping_lagsfit123.nc"      Exp Fit to SST - Expfit to SSS; Mean of Lags 1,2,3
-"ExpfitSST123"      "CESM1_HTR_FULL_Expfit_SST_damping_lagsfit123.nc"       Exp Fit to SST (total); Mean of Lags 1,2,3
-"LHFLXnomasklag1"   "CESM1_HTR_FULL_LHFLX_damping_nomasklag1_EnsAvg.nc"     Default LHFLX Damping as calculated from covariance-based method
-"""
-if dampstr == "Expfitlbda123":
-    convert_wm2=True
-    hff_nc   = "CESM1_HTR_FULL_Expfit_lbda_damping_lagsfit123.nc"
-elif dampstr == "nomasklag1":
-    convert_wm2=False
-    hff_nc = "CESM1_HTR_FULL_qnet_damping_nomasklag1.nc"
-elif dampstr == "ExpfitSST123":
-    convert_wm2=True
-    hff_nc   = "CESM1_HTR_FULL_Expfit_SST_damping_lagsfit123.nc"#"CESM1_HTR_FULL_qnet_damping_nomasklag1.nc"
-elif dampstr == "LHFLXnomasklag1":
-    convert_wm2= False
-    hff_nc   = "CESM1_HTR_FULL_LHFLX_damping_nomasklag1.nc"
-
-else:
-    print("Invalid dampstr, currently not supported...")
-    
-# Conversion Factors
-dt  = 3600*24*30
-cp0 = 3996
-rho = 1026
-
-
-
-# -----------------------------------------------------------------------------
-#%% Part 2: Load and Convert Damping
-# -----------------------------------------------------------------------------
-
-
-# Load HFF
-dshff    = xr.open_dataset(damppath+dampnc)[dampname] # [mon x ens x lat x lon]
-
-# Load mixed layer depth for conversion
-ds_mld   = xr.open_dataset(mldnc)[mldname]
-
-# Check sizes, make sure they are all the same...
-# if dampstr is not None: # Not sure why, but it seems that the hff default is wrongly cropped
-#     ds_list = ds_dt + [dshff,ds_mld]
-#     ds_rsz  = proc.resize_ds(ds_list)
-#     ds_dt = ds_rsz[:2]
-#     dshff = ds_rsz[2]
-#     ds_mld = ds_rsz[3]
-
-# Convert HFF (1/mon to W/m2 per degC) if needed
-if convert_wm2:
-
-    dshff = dshff * (rho*cp0*ds_mld.h) / dt  * -1 #need to do a check for - value!!
-else:
-    dshff= dshff.damping
-
-# Load output to numpy
-hff     = dshff.values
-sst     = ds_dt[0].SST.values
-qnet    = ds_dt[1][flxname].values
+if lensflag is False: # Add singleton dimension for ensemble
+    qnet    = qnet[:,None,:,:]
+    hff     = hff[:,None,:,:]
+    sst     = sst[:,None,:,:]
 
 # -----------------------------------------------------------------------------
 #%% Part 3: Tile heat flux feedback and make Fprime 
 # -----------------------------------------------------------------------------
+# Get Dimensions
 ntime,nens,nlat,nlon        = qnet.shape # Check sizes and get dimensions for tiling
 ntimeh,nensh,nlath,nlonh    = hff.shape
+
 nyrs                        = int(ntime/12)
-hfftile                     = np.tile(hff.transpose(1,2,3,0),nyrs)
-hfftile                     = hfftile.transpose(3,0,1,2)
+
+hfftile                     = np.tile(hff.transpose(1,2,3,0),nyrs) # [nens,nlat,nlon,ntime]
+hfftile                     = hfftile.transpose(3,0,1,2) #   # [nens,nlat,nlon,ntime]
+
 # Check plt.pcolormesh(hfftile[0,0,:,:]-hfftile[12,0,:,:]),plt.colorbar(),plt.show()
 
 #% Calculate F'
-Fprime       = qnet - hfftile*np.roll(sst,nroll) # Minus is the correct way to go
+Fprime       = qnet - hfftile*np.roll(sst,nroll,axis=0) # Minus is the correct way to go
 #Fprime_minus = qnet - hfftile*np.roll(sst,nroll)
 
 # -----------------------------------------------------------------------------
 #%% Part 4: Save Fprime output (full timeseries) (Optional)
 # -----------------------------------------------------------------------------
-if Eprime:
-    outvar = "LHFLX"
+if lensflag:
+    coords   = dict(time=ds_dt[0].time.values,ens=dshff.ens.values,lat=dshff.lat.values,lon=dshff.lon.values)
 else:
-    outvar = "Fprime"
+    coords   = dict(time=ds_dt[0].time.values,lat=dshff.lat.values,lon=dshff.lon.values)
+daf      = xr.DataArray(Fprime.squeeze(),coords=coords,dims=coords,name=outvar)
 
-coords   = dict(time=ds_dt[0].time.values,ens=dshff.ens.values,lat=dshff.lat.values,lon=dshff.lon.values)
-daf      = xr.DataArray(Fprime,coords=coords,dims=coords,name=outvar)
-savename = "%sCESM1_HTR_FULL_%s_timeseries_%s_%s_NAtl.nc" % (rawpath1,"Eprime",dampstr,rollstr)
+savename = "%s%s_%s_timeseries_%s_%s_NAtl.nc" % (outpath,datname,outvar,dampstr,rollstr)
+
 edict    = {outvar:{'zlib':True}}
 daf.to_netcdf(savename,encoding=edict)
 print("Script ran to completion in %.2fs" % (time.time()-st))
+
+
+
+#%% Debugging stuff
+debug = True
+
+if debug:
+    import yo_box as ybx
+    from amv import proc
+    scmpath = "/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/" # scm module
+    sys.path.append(scmpath)
+    import scm
+    
+    lonf = -30
+    latf = 50
+    
+    # Get SST and Qnet
+    dspt        = [proc.selpt_ds(ds,lonf,latf,) for ds in ds_dt]
+    sstpt,qnetpt= dspt[0].values,dspt[1].values
+    hffpt       = proc.selpt_ds(dshff,lonf,latf) 
+    
+    # Tile and Compute
+    nyrs          = int(len(ds_dt[0].time)/12)
+    if lensflag:
+        hffpttile     = np.array([np.tile(hffpt.values[:,e][:],nyrs).flatten() for e in range(nens)]).T
+    else:
+        hffpttile     = np.tile(hffpt,nyrs)
+        
+    hffpttile = hffpttile * -1
+    
+    
+    Fp        = qnetpt + hffpttile*np.roll(sstpt,nroll)
+    Fpminus   = qnetpt - hffpttile*np.roll(sstpt,nroll)
+    
+    Fpminusr1 = qnetpt - hffpttile*np.roll(sstpt,-2,axis=0)
+    
+    
+    #%% Look at spectra
+    
+    # original test
+    #ints    = [sstpt,qnetpt,Fp,Fpminus,Fpminusr1]
+    #labs    = ["SST","Qnet","Fprime Plus","Fprime Minus","Fprime Minus Roll 1"]
+    # calculated test
+    ints     = [daf.sel(lon=lonf,lat=latf,method='nearest').data,
+                ds_dt[1].sel(lon=lonf,lat=latf,method='nearest').data]
+    
+    labs     = ['Fprime',"qnet"]
+    
+    
+    
+    #output  = scm.quick_spectra(ints,)
+    
+    nsmooth  = 150
+    pct      = 0.1
+    dtin     = 3600*24*30
+    
+    specvars = []
+    nvars    = len(ints)
+    for vv in range(nvars):
+        tsens    = ints[vv]
+        if lensflag:
+            tsens    = [tsens[:,e] for e in range(nens)]
+        else:
+            tsens    = [tsens]
+        specout  = scm.quick_spectrum(tsens, nsmooth, pct, dt=dtin,return_dict=True,
+                                     make_arr=True)
+        specvars.append(specout)
+    
+    #%% PLot the ensemble mean
+    dtplot  = dtin
+    fig,axs = plt.subplots(nvars,1,constrained_layout=True,figsize=(12,10))
+    
+    for vv in range(nvars):
+        ax = axs[0]
+        if lensflag:
+            plotspec = specvars[vv]['specs'].mean(0)/dtplot
+            plotfreq = specvars[vv]['freqs'].mean(0) * dtplot
+        else:
+            plotspec = specvars[vv]['specs'].squeeze()/dtplot
+            plotfreq = specvars[vv]['freqs'].squeeze()* dtplot
+        
+        ax.plot(plotfreq,plotspec,label=labs[vv])
+        
+        ax.axhline(np.var(ints[vv])/(plotfreq[-1] - plotfreq[0]))
+        ax.legend()
+        
+    plt.show()
+    
+    
+    
+    
+    
+
+
+# #%%
+
+# #%%
+# # Indicate Search String for qnet/SST files ------d
+# ncstr1   = "CESM1LE_%s_NAtl_19200101_20050101_bilinear.nc"
+
+# # Indicate Mixed-Layer Depth File
+# mldnc    = "%sCESM1_HTR_FULL_HMXL_NAtl.nc" % mldpath
+
+# # Fprime Calculation Options
+# nroll    = 0
+
+
+# # Damping Options ----------
+# dampstr = "LHFLXnomasklag1" # Damping String  (see below, "load damping of choice")
+# """
+# Current List of Damping Strings
+# -- Name             -- ncfile                                               -- Description
+# "nomasklag1"        "CESM1_HTR_FULL_qnet_damping_nomasklag1.nc"             Default Qnet Damping as calculated from covariance-based method.
+# "Expfitlbda123"     "CESM1_HTR_FULL_Expfit_lbda_damping_lagsfit123.nc"      Exp Fit to SST - Expfit to SSS; Mean of Lags 1,2,3
+# "ExpfitSST123"      "CESM1_HTR_FULL_Expfit_SST_damping_lagsfit123.nc"       Exp Fit to SST (total); Mean of Lags 1,2,3
+# "LHFLXnomasklag1"   "CESM1_HTR_FULL_LHFLX_damping_nomasklag1_EnsAvg.nc"     Default LHFLX Damping as calculated from covariance-based method
+# """
+# if dampstr == "Expfitlbda123":
+#     convert_wm2=True
+#     hff_nc   = "CESM1_HTR_FULL_Expfit_lbda_damping_lagsfit123.nc"
+# elif dampstr == "nomasklag1":
+#     convert_wm2=False
+#     hff_nc = "CESM1_HTR_FULL_qnet_damping_nomasklag1.nc"
+# elif dampstr == "ExpfitSST123":
+#     convert_wm2=True
+#     hff_nc   = "CESM1_HTR_FULL_Expfit_SST_damping_lagsfit123.nc"#"CESM1_HTR_FULL_qnet_damping_nomasklag1.nc"
+# elif dampstr == "LHFLXnomasklag1":
+#     convert_wm2= False
+#     hff_nc   = "CESM1_HTR_FULL_LHFLX_damping_nomasklag1.nc"
+
+# else:
+#     print("Invalid dampstr, currently not supported...")
+    
+# # Conversion Factors
+# dt  = 3600*24*30
+# cp0 = 3996
+# rho = 1026
+
+
+
 
 # -----------------------------------------------------------------------------
 #%% Part 5. Check Whitening at a point
 # -----------------------------------------------------------------------------
 
-#% Here's a debug section to check the power spectra and whitening using Fprime
-lonf  = -30
-latf  = 50
-nroll = 0
-
-# Get SST and Qnet
-dspt = [proc.selpt_ds(ds,lonf,latf,) for ds in ds_dt]
-sstpt,qnetpt= dspt[0].SST.values,dspt[1][flxname].values
-hffpt       = proc.selpt_ds(dshff,lonf,latf)
-
-# Tile and Compute
-nyrs        = int(len(ds_dt[0].time)/12)
-hffpttile     = np.array([np.tile(hffpt.values[:,e][:],nyrs).flatten() for e in range(nens)]).T
-
-
-Fp        = qnetpt + hffpttile*np.roll(sstpt,nroll)
-Fpminus   = qnetpt - hffpttile*np.roll(sstpt,nroll)
-
-Fpminusr1 = qnetpt - hffpttile*np.roll(sstpt,-2,axis=0)
-
-#%% Look at spectra
-
-ints    = [sstpt,qnetpt,Fp,Fpminus,Fpminusr1]
-labs    = ["SST","Qnet","Fprime Plus","Fprime Minus","Fprime Minus Roll 1"]
-#output  = scm.quick_spectra(ints,)
-
-nsmooth  = 5
-pct      = 0.1
-dtin     = 3600*24*30
-
-specvars = []
-nvars    = len(ints)
-for vv in range(nvars):
-    tsens    = ints[vv]
-    tsens    = [tsens[:,e] for e in range(nens)]
-    specout  = scm.quick_spectrum(tsens, nsmooth, pct, dt=dtin,return_dict=True,
-                                 make_arr=True)
-    specvars.append(specout)
+if debug:
     
-#%% PLot the ensemble mean
-dtplot  = dtin
-fig,axs = plt.subplots(nvars,1,constrained_layout=True,figsize=(12,10))
+    
+    
+    #% Here's a debug section to check the power spectra and whitening using Fprime
+    lonf  = -30
+    latf  = 50
+    nroll = 0
+    
+    # Get SST and Qnet
+    dspt        = [proc.selpt_ds(ds,lonf,latf,) for ds in ds_dt]
+    sstpt,qnetpt= dspt[0].SST.values,dspt[1][flxname].values
+    hffpt       = proc.selpt_ds(dshff,lonf,latf)
+    
+    # Tile and Compute
+    nyrs        = int(len(ds_dt[0].time)/12)
+    hffpttile     = np.array([np.tile(hffpt.values[:,e][:],nyrs).flatten() for e in range(nens)]).T
+    
+    
+    Fp        = qnetpt + hffpttile*np.roll(sstpt,nroll)
+    Fpminus   = qnetpt - hffpttile*np.roll(sstpt,nroll)
+    
+    Fpminusr1 = qnetpt - hffpttile*np.roll(sstpt,-2,axis=0)
 
-for vv in range(nvars):
-    ax = axs[vv]
-    plotspec = specvars[vv]['specs'].mean(0)/dtplot
-    plotfreq = specvars[vv]['freqs'].mean(0) * dtplot
-    ax.plot(plotfreq,plotspec,label=labs[vv])
-    
-    ax.axhline(np.var(ints[vv])/(plotfreq[-1] - plotfreq[0]))
-    ax.legend()
-    
+
+        
     
 #%% Look at ACF
 
