@@ -91,8 +91,9 @@ stormtrack   = 1
 # Indicate inputs
 datname      = "cesm1le_htr_5degbilinear"
 lensflag     = True # Set to True for lens datasets/to detrend with ensemble average
-outvar       = "Fprime"  # "Set to Fprime by default, but LHFLX for Eprime calculations..."
+outvar       = "Eprime"  # "Set to Fprime by default, but LHFLX for Eprime calculations..."
 outpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
+regstr       = "Global"
 
 # Mixed Layer Depth --> [h: time x lat x lon180]
 mldpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/mld/"
@@ -101,8 +102,8 @@ mldname      = "h"
 
 # Net Heat Flux (Positive Upwards) --> [qnet: time x lat x lon180]
 flxpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
-flxnc        = "cesm1_htr_5degbilinear_qnet_Global_1920to2005.nc"
-flxname      = 'qnet'
+flxnc        = "cesm1_htr_5degbilinear_LHFLX_Global_1920to2005.nc"
+flxname      = 'LHFLX'
 
 # SST
 sstpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
@@ -110,16 +111,17 @@ sstnc        = "cesm1_htr_5degbilinear_TS_Global_1920to2005.nc"
 sstname      = 'TS'
 
 # Damping 
-damppath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/qnet_damping/"
+damppath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/LHFLX_damping/"
 dampnc       = "cesm1_htr_5degbilinear_hfdamping_Global_1920to2005_ensorem1_detrend1.nc"
-dampname     = 'qnet_damping'
+dampname     = 'LHFLX_damping'
 ilag         = 0 # Indicate which lag to select
 
 # Damping Information and roll options
-dampstr      = "cesm1le5degqnet"
+dampstr      = "cesm1le5degLHFLX"
 nroll        = 0 # Amount to roll lbd*T' term
 rollstr      = "nroll%0i"  % nroll
 convert_wm2  = False # Convert hff to wm2
+
 
 # Conversion Factors
 dt          = 3600*24*30
@@ -246,7 +248,7 @@ else:
     coords   = dict(time=ds_dt[0].time.values,lat=dshff.lat.values,lon=dshff.lon.values)
 daf      = xr.DataArray(Fprime.squeeze(),coords=coords,dims=coords,name=outvar)
 
-savename = "%s%s_%s_timeseries_%s_%s_NAtl.nc" % (outpath,datname,outvar,dampstr,rollstr)
+savename = "%s%s_%s_timeseries_%s_%s_%s.nc" % (outpath,datname,outvar,dampstr,rollstr,regstr)
 
 edict    = {outvar:{'zlib':True}}
 daf.to_netcdf(savename,encoding=edict)
