@@ -92,8 +92,7 @@ elif "cesm1_htr" in dataset_name:
     nens = 42
 else:
     nens = 1
-    
-    
+
 #%% Options for each step
 
 # Step 1 (Preprocessing)
@@ -154,9 +153,19 @@ for ensnum in np.arange(1,nens+1):
         # Slice to time period of interest
         if croptime:
             da = da.sel(time=slice(tstart,tend),drop=True)
+            
+            
+        
+    
+        
         
         
         if lensflag:
+            # Fix ens numbering
+            if da.ens.data[0] == 0:
+                print("Adjusting ensemble numbering")
+                da['ens'] = da.ens.data+1
+            
             # Compute Ensemble average for calculations later
             eavg_fname  = hf.addstrtoext(ncname,"_ensavg",adjust=-1)
             query = glob.glob(eavg_fname)
@@ -432,9 +441,29 @@ for ensnum in np.arange(1,nens+1):
     ds.to_netcdf(savename,
              encoding=encoding_dict)
     print("Saved in %.2fs" % (time.time()-st))
-    
-    
 print("Script Ran to Completion in %.2fs"%(time.time()-st_script))
 #%%
+
+if lensflag:
+    ds_all = []
+    for e in range(nens):
+        savename = "%s%s_hfdamping_%s_%s_ensorem%i_detrend%i_ens%02i.nc" % (datpath_out,dataset_name,
+                                                                              bbox_name,timestr,
+                                                                              ensorem,detrend,e+1)
+        
+        ds = xr.open_dataset(savename).load()
+        ds_all.append(ds.copy())
+    
+    ds_all = xr.concat(ds_all,dim='ens')
+    edict  = hf.make_encoding_dict(ds_all)
+    
+    savename = "%s%s_hfdamping_%s_%s_ensorem%i_detrend%i.nc" % (datpath_out,dataset_name,
+                                                                          bbox_name,timestr,
+                                                                          ensorem,detrend)
+    ds_all.to_netcdf(savename,encoding=edict)
+    
+    
+    
+        
 
 
