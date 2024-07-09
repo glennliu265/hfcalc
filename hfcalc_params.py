@@ -91,7 +91,7 @@ hparam4 = {
     'method'  : 1       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
     }
 
-hname5 = "cesm1le5degqnetDamp" # cesm2_pic damping (years 200-2000), lag 1
+hname5 = "cesm1le5degqnetDamp" # cesm1 lens damping regridded to 5 deg
 hparam5 = {
     'ensorem' : 1,      # 1=enso removed, 0=not removed
     'ensolag' : 1,      # Lag Applied toENSO and Variable before removal
@@ -104,9 +104,23 @@ hparam5 = {
     'method'  : 1       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
     }
 
+
+hname6 = "cesm1le5degLHFLXDamp" # cesm
+hparam6 = {
+    'ensorem' : 1,      # 1=enso removed, 0=not removed
+    'ensolag' : 1,      # Lag Applied toENSO and Variable before removal
+    'monwin'  : 3,      # Size of month window for HFF calculations
+    'detrend' : 1,      # Whether or not variable was detrended
+    'tails'   : 2,      # tails for t-test
+    'p'       : 1.00,   # p-value for significance testing
+    'sellags' : [0,],   # Lags included (indices, so 0=lag1)
+    'lagstr'  : "lag1", # Name of lag based on sellags
+    'method'  : 1       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
+    }
+
 # Combine and make the dictionaries
-hff_names = [hname1,hname2,hname3,hname4,hname5,]
-hff_dicts = [hparam1,hparam2,hparam3,hparam4,hparam5]
+hff_names = [hname1,hname2,hname3,hname4,hname5,hname6]
+hff_dicts = [hparam1,hparam2,hparam3,hparam4,hparam5,hparam6]
 hff_sets  = dict(zip(hff_names,hff_dicts))
 
 #%%

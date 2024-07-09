@@ -66,7 +66,7 @@ if croptime_estimate:
 bbox_name           = "Global"#"NAtl"
 
 # Variables and Dataset Name
-vnames_in           = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+vnames_in           = ['TS','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
 dataset_name        = 'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
 ensnum              = 42
 lensflag            = True
@@ -461,7 +461,7 @@ if lensflag:
                                                                           bbox_name,timestr,
                                                                           ensorem,detrend)
     ds_all.to_netcdf(savename,encoding=edict)
-    
+    print("Saved combined output to %s" % savename)
     
     
         
