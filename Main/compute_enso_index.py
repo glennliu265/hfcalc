@@ -37,8 +37,11 @@ import sys
 import cartopy.crs as ccrs
 import glob
 
+import pandas as pd
+
+
 #%% Import modules
-stormtrack = 1
+stormtrack = 0
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -65,9 +68,11 @@ import amv.proc as hf # Update hf with actual hfutils script, most relevant func
 
 # Select time crop (prior to preprocessing)
 croptime          = True # Cut the time prior to detrending, EOF, etc
-tstart            =  '1920-01-01'#'0001-01-01' # "2006-01-01" # 
-tend              =  '2005-12-31'#'2000-02-01' # "2101-01-01" # 
+tstart            =  '1982-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
+tend              =  '2020-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
 timestr           = "%sto%s" % (tstart[:4],tend[:4])
+
+
 
 # ENSO Parameters
 pcrem             = 3                   # PCs to calculate
@@ -82,23 +87,39 @@ debug            = True # Debug toggle
 # Example provided below here is for CESM1
 
 # Data Information
-dataset_name        = 'cesm1_htr_5degbilinear'#"cesm2_pic"
-datpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"#"/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/"
-vname               = "TS"
+# dataset_name        = 'cesm1_htr_5degbilinear'#"cesm2_pic"
+# datpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"#"/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/"
+# vname               = "TS"
+# lonname             = "lon"
+# latname             = "lat"
+# timename            = "time"
+# concat_dim          = "ens" #"time"
+# keepvars            = [timename,latname,lonname,vname]
+# ensnum              = 1 # Irrelevant for now, need to add ensemble support...
+# detrend             = 1 # 1 to remove linear trend 
+maskpath            = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/"
+maskname            = 'cesm1_htr_5degbilinear_limask_0.3p_0.05p_year1920to2005_enssum.nc'#"cesm2_pic_limask_0.3p_0.05p.nc"
+
+# NOAA OISST
+dataset_name        = 'OISST'#"cesm2_pic"
+datpath             = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/"
+vname               = "sst"
 lonname             = "lon"
 latname             = "lat"
 timename            = "time"
-concat_dim          = "ens" #"time"
+concat_dim          = None#"time"
 keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
 detrend             = 1 # 1 to remove linear trend 
 
 # Mask Information (first run a maskmaker script/section such as that in preproc_CESM2_PiControl.py)
-maskpath            = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/"
-maskname            = 'cesm1_htr_5degbilinear_limask_0.3p_0.05p_year1920to2005_enssum.nc'#"cesm2_pic_limask_0.3p_0.05p.nc"
+maskpath = None
+maskname = None
 
 # Output Path (Checks for an "enso" folder)
-outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
+#outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
+outpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
+
 
 #%%
 
@@ -107,6 +128,8 @@ outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdampi
 # Create filename/list and load 
 if dataset_name == "cesm2_pic":
     searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
+elif dataset_name == "OISST": # Just grab tropical pacific
+    searchstr = "%s%s*%s*TropicalPacific.nc" % (datpath,dataset_name,vname) # Searches for datpath + *LANDFRAC*.nc
 else:
     searchstr = "%s%s*%s*.nc" % (datpath,dataset_name,vname) # Searches for datpath + dataset_name*LANDFRAC*.nc"
 nclist    = glob.glob(searchstr)
@@ -114,22 +137,38 @@ nclist.sort()
 print("Found %i files for %s" % (len(nclist),vname))
 
 # Drop Unnecessary variables
-print("Concatenating files by dim <%s>" % (concat_dim))
-ds_all    = xr.open_mfdataset(nclist,concat_dim=concat_dim,combine='nested')
+if concat_dim is None or len(nclist) == 1: # Assume no concantenation is needed
+    ds_all    = xr.open_dataset(nclist[0])
+else:
+    print("Concatenating files by dim <%s>" % (concat_dim))
+    ds_all    = xr.open_mfdataset(nclist,concat_dim=concat_dim,combine='nested')
 ds_all    = hf.ds_dropvars(ds_all,keepvars)
-ds_all    = hf.fix_febstart(ds_all)
+try:
+    ds_all    = hf.fix_febstart(ds_all)
+except:
+    print("Warning, Time is not in datetime... converting")
+    print("First timestep (pre conversion) is %s" % (ds_all[timename][0]))
+    timeconv = pd.to_datetime(ds_all.time.data)
+    ds_all[timename] = timeconv
+    print("First timestep (post conversion) is %s" % (ds_all[timename][0]))
+    
+    #ds_all['time2'] = pd.to_datetime(ds_all.time.data)
+    print("Warning: February Start Fix was not implemented")
+    #print("First timestep is %s" % (ds_all[timename][0]))
 
 # Load it
 st        = time.time()
 ds_all    = ds_all[vname]#.load()
 print("Loaded in %.2fs" % (time.time()-st))
 
-
 # 1B. Load and Apply Mask
-st = time.time()
-mask = xr.open_dataset(maskpath+maskname).mask.load()
-ds_all = ds_all * mask
-print("Mask applied in %.2fs" % (time.time()-st))
+if (maskpath is None) or (maskname is None):
+    print("No mask will be applied")
+else:
+    st = time.time()
+    mask = xr.open_dataset(maskpath+maskname).mask.load()
+    ds_all = ds_all * mask
+    print("Mask applied in %.2fs" % (time.time()-st))
 
 
 # Set ensemble flag
@@ -137,7 +176,6 @@ lensflag = False
 if 'ens' in list(ds_all.dims):
     print("Ensemble dimension detected!")
     lensflag = True
-    
 
 #%% 2. Preprocessing
 
@@ -156,8 +194,8 @@ dsreg = dsreg.load()
 print("Output Loaded in %.2fs" % (time.time()-st))
 
 # Remove seasonal cycle
-ds_anom  = hf.xrdeseason(dsreg)
-
+#ds_anom  = hf.xrdeseason(dsreg) # hf.xrdeseason is not working?
+ds_anom  = proc.xrdeseason(dsreg,check_mon=False)
 
 # Remove Trend if option is set
 if detrend:
@@ -175,7 +213,7 @@ if detrend:
         
         # Simple Linear Detrend
         dt_dict   = hf.detrend_dim(ds_anom.values,0,return_dict=True)# ASSUME TIME in first axis
-
+        
         # Put back into DataArray
         da = xr.DataArray(dt_dict['detrended_var'],dims=ds_anom.dims,coords=ds_anom.coords,name=vname)
 
@@ -325,6 +363,7 @@ else:
     print("Skipping. Found existing file: %s" % (str(query)))
 # End Skip
 
+#%% Plot the ENSO Index
 
 
 
