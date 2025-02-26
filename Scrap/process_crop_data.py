@@ -97,6 +97,11 @@ dsall_natl  = dsall_natl.rename({vname:vname_out})
 edict       = proc.make_encoding_dict(dsall_natl)
 dsall_natl.to_netcdf(outname,encoding=edict)
 
+#%% now repeat for ERA5
+
+vname = "sst"
+
+
 #%% Now do for SST
 
 dpath      = "/vortex/jetstream/climate/data/yokwon/NOAA_OI_0.25deg_v2.1/processed/monthly/"
@@ -278,3 +283,61 @@ ds_cat.to_netcdf(outname,encoding=edict)
 
 
 dsmax = ds.icec.max('time')
+
+
+
+#%% Get CESM2 (copied from preproc_CESM2_PiControl)
+
+datname       = "cesm2_pic"
+
+datpath       = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/" # Path to regridded mixed-layer depth
+
+
+def load_cesm2_pic(vname,datpath,searchstr=None):
+    # Function to Load CESM2 PiC Output on stormtrack, Searches for 
+    # File is assumed to be at <datpath>/<vname>/*<vname>*.nc
+    keepvars  = ["time","lat","lon",vname]
+    if searchstr is None:
+        searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
+    nclist    = glob.glob(searchstr)
+    nclist.sort()
+    
+    ds_all    = xr.open_mfdataset(nclist,concat_dim="time",combine='nested')
+    ds_all    = proc.ds_dropvars(ds_all,keepvars)
+    ds_all    = proc.fix_febstart(ds_all)
+    
+    return ds_all
+
+
+ds_all = load_cesm2_pic("TS",datpath)
+
+vname     = "TS"
+keepvars  = ["time","lat","lon",vname]
+searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
+nclist    = glob.glob(searchstr)
+nclist.sort()
+print("Found %i files for %s" % (len(nclist),vname))
+
+# Drop Unnecessary variables
+ds_all    = xr.open_mfdataset(nclist,concat_dim="time",combine='nested')
+ds_all    = proc.ds_dropvars(ds_all,keepvars)
+ds_all    = proc.fix_febstart(ds_all)
+
+# Load it
+import time
+st        = time.time()
+ds_all    = ds_all[vname].load()
+print("Loaded in %.2fs" % (time.time()-st))
+
+# Reformat DS
+ds_all = proc.format_ds(ds_all)
+
+# Crop to NATL Region
+ds_reg = proc.sel_region_xr(ds_all,natl_box)
+
+outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/"
+outname = outpath+"cesm2_pic_TS_NAtl_0001_2000.nc"
+edict   = proc.make_encoding_dict(ds_reg)
+ds_reg.to_netcdf(outname,encoding=edict)
+
+print(outname)
