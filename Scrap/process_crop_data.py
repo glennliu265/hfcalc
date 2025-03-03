@@ -190,7 +190,7 @@ ds_thflx.to_netcdf(outname_thflx_new,encoding=edict)
 # Save version leading up to 2021
 ds_thflx            = ds_lhflx.lhflx + ds_shflx.shflx
 ds_thflx            = ds_thflx.rename('thflx')
-ds_thflx            = ds_thflx.sel(time=slice('1982-01-01','2021-12-31'))
+ds_thflx            = ds_thflx.sel(time=slice('1979-01-01','2021-12-31'))
 edict               = proc.make_encoding_dict(ds_thflx)
 outname_thflx_new   = dpath + "ERA5_thflx_NAtl_1979to2021.nc"
 ds_thflx.to_netcdf(outname_thflx_new,encoding=edict)
