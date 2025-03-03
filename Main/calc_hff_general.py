@@ -36,40 +36,48 @@ import scipy as sp
 
 # stormtrack
 amvpath = "/home/glliu/00_Scripts/01_Projects/00_Commons/" # amv module
+#amvpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/00_Commons/03_Scripts/" # amv module
 sys.path.append(amvpath)
 import amv.proc as hf
+
+
+
 
 # -------------
 #%% User Edits
 # -------------
 
 # Set Path and options
-datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
-overwrite         = False # Set to True to ovewrite
+#datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
+#datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/" 
+datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/"
+overwrite         = True # Set to True to ovewrite
 debug             = True # Set to true for debugging plots
 
 # Indicate Time Crop (for input)
 croptime          = True
-tstart            =  '1920-01-01'#'0200-01-01' # "2006-01-01" # 
-tend              =  '2005-12-31'#'2000-12-31' #"2101-01-01" # 
+tstart            =  '1982-01-01'#'1920-01-01'#'0200-01-01' # "2006-01-01" # 
+tend              =  '2020-12-31'#'2005-12-31'#'2000-12-31' #"2101-01-01" # 
 timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
 
 # Select time crop (for the estimate)
 croptime_estimate = False # Cut time right before estimating the heat flux feedback
-tcrop_start       = "1970-01-01"#'1920-01-01' '2070-01-01'#
-tcrop_end         = "1999-12-31"#'1970-01-01' '2099-12-31'#
+tcrop_start       = '1982-01-01'#"1970-01-01"#'1920-01-01' '2070-01-01'#
+tcrop_end         = '2020-12-31'#"1999-12-31"#'1970-01-01' '2099-12-31'#
 tcrop_fname       = ""
 if croptime_estimate:
     tcrop_fname     = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
     
 # Indicate bbox crop information
-bbox_name           = "Global"#"NAtl"
+bbox_name           = "NAtl" # "Global"#
 
 # Variables and Dataset Name
-vnames_in           = ['TS','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
-dataset_name        = 'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
-ensnum              = 42
-lensflag            = True
+vnames_in           = ['sst','thflx'] #['TS','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+dataset_names       = ['OISST',"ERA5_RegridOISST"] #'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
+# Note: Currently hard coded (unfortunately) to read the first dataset name as sst, second as flx
+#hflx_name           = "ERA" # set to None if dataset_name is same as hflx_name
+ensnum              = 1 #42
+lensflag            = False#True
 
 # These should be unnecessary after preproc_raw_inputs
 lonname             = 'lon'
@@ -80,6 +88,7 @@ tname               = 'time'
 lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
 
 # Determine number of ensemble members
+dataset_name = dataset_names[0]
 if dataset_name == 'rcp85':
     nens = 40
 elif dataset_name in ('gfdl_esm2m_lens', "csiro_mk36_lens"):
@@ -96,7 +105,7 @@ else:
 #%% Options for each step
 
 # Step 1 (Preprocessing)
-detrend           = 1  # Detrend Method
+detrend           = 1  # Detrend Method, 0 = gmsst, 1 = linear
     
 # Step 2 (Remove ENSO)
 pcrem             = 3    # PCs calculated
@@ -115,6 +124,7 @@ ensopath = datpath + "enso/"
 hffpath  = datpath + "hff/"
 maskpath = datpath + "masks/"
 procpath = datpath + "proc/"
+
 
 #%%
 
@@ -140,26 +150,27 @@ for ensnum in np.arange(1,nens+1):
     
     """
     
-    for v in vnames_in:
+    for vv,v in enumerate(vnames_in):
         
+        dataset_name = dataset_names[vv]
+
+            
         # Load the variable processed by [preproc_raw_inputs], [time x lat x lon180]
         ncname = "%s%s_%s_%s_%s.nc" % (procpath,dataset_name,v,bbox_name,timestr)
         da     = xr.open_dataset(ncname) # [Time x Lat x Lon]
         
         # Below section should already be done
         # Fix February Start
-        da = hf.fix_febstart(da)
+        try:
+            da = hf.fix_febstart(da)
+        except:
+            print("Warning: Skipping Febstart check due to issue with fix_febstart")
+        
         
         # Slice to time period of interest
         if croptime:
             da = da.sel(time=slice(tstart,tend),drop=True)
-            
-            
-        
-    
-        
-        
-        
+
         if lensflag:
             # Fix ens numbering
             if da.ens.data[0] == 0:
@@ -212,6 +223,24 @@ for ensnum in np.arange(1,nens+1):
                 ensavg      = ensavg.sel(time=slice(tstart,tend),drop=True)
                 ensavg      = ensavg[v].values
                 invar       = invar - ensavg
+            else:
+                # Make sure it is in time x lat x lon (move this earlier)
+                invar = da[v].transpose('time','lat','lon').values
+            # elif detrend: # Simple Linear Detrend
+            
+            #     print("Detrending by removing linear fit")
+            #     ds_anom   = da[v].transpose('time','lat','lon')
+                
+            #     # Simple Linear Detrend
+            #     dt_dict   = hf.detrend_dim(ds_anom.values,0,return_dict=True)# ASSUME TIME in first axis
+                
+                
+            #     invar = dt_dict['detrended_var']
+            #     # Put back into DataArray
+            #     #da = xr.DataArray(dt_dict['detrended_var'],dims=ds_anom.dims,coords=ds_anom.coords,name=vname)
+
+                
+                
                 
             # Remove monthly anomalies
             # ------------------------
@@ -219,7 +248,7 @@ for ensnum in np.arange(1,nens+1):
             manom,invar = hf.calc_clim(invar,0,returnts=1) # Calculate clim with time in axis 0
             vanom = invar - manom[None,:,:,:]
             vanom = vanom.reshape(nmon,nlat,nlon) # Reshape back to [time x lat x lon]
-        
+            
             # Flip latitude
             if lat[0] > lat[-1]: # If latitude is decreasing...
                 lat   = np.flip(lat)
@@ -283,6 +312,8 @@ for ensnum in np.arange(1,nens+1):
     allstart = time.time()
     
     # Load ENSO Index
+    #dataset_name    = dataset_names[0] # Note, this is the SST
+    dataset_name = dataset_names[0]
     savename_ensoid = "%s%s_ENSO_detrend%i_pcs%i_%s.nc" % (ensopath,dataset_name,detrend,pcrem,timestr)
     # if lensflag:
     #     savename_ensoid = hf.addstrtoext(savename_ensoid,"_ens%02i"%(ensnum),adjust=0)
@@ -295,9 +326,10 @@ for ensnum in np.arange(1,nens+1):
         ensoid = ensoid.sel(ens=ensnum)
     
     # Loop by each variable and remove ENSO
-    for v in vnames_in:
+    for vv,v in enumerate(vnames_in):
         
         # Load Target variable
+        dataset_name = dataset_names[vv]
         savename_anom = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,dataset_name,v,bbox_name,timestr,detrend)
         if lensflag:
             savename_anom = hf.addstrtoext(savename_anom,"_ens%02i"%(ensnum),adjust=-1)
@@ -349,13 +381,14 @@ for ensnum in np.arange(1,nens+1):
     
     # Load inputs with variables removed
     invars = []
-    for v in vnames_in:
-        
+    invars_da = []
+    for vv,v in enumerate(vnames_in):
+        dataset_name = dataset_names[vv]
         if ensorem:
             savename_anom_ld = "%s%s_%s_%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i.nc" % (anompath,dataset_name,v,
                                                                                        bbox_name,timestr,
                                                                                        detrend,ensolag,pcrem,monwin)
-            
+        
         else:
             savename_anom_ld = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,dataset_name,v,bbox_name,timestr,detrend)
         if lensflag:
@@ -374,6 +407,7 @@ for ensnum in np.arange(1,nens+1):
         loadvar         = loadvar.reshape(int(ntime/12),12,nlat,nlon)
         
         invars.append(loadvar)
+        invars_da.append(ds[v])
     
     #% Calculate heat flux
     sst,flx = invars
