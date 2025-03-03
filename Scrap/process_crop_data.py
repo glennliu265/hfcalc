@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-
-Process and Crop the data for heat flux feedback calculations
+Process and Crop the data for heat flux feedback calculations for the #SMIO project
 
 Created on Tue Feb 18 13:19:28 2025
 
@@ -39,7 +38,9 @@ natl_box = [-100,20,-10,90]
 enso_box = [120, 290, -20, 20] # Get ENSO Box (SST only)
 outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/"
 
+# =============================================
 #%% Get ERA5, Monthly Surface Latent Heat Flux
+# =============================================
 
 # Get List of NetCDF files
 vname    = 'slhf'
@@ -74,7 +75,9 @@ dsall_natl.to_netcdf(outname,encoding=edict)
 # edict       = proc.make_encoding_dict(dsload)
 # dsload.to_netcdf(newname,encoding=edict)
 
+# =============================================
 #%% Do same thing for Monthly Sensible latent heat flux
+# =============================================
 
 vname       = "sshf"
 vname_out   = "shflx"
@@ -97,12 +100,39 @@ dsall_natl  = dsall_natl.rename({vname:vname_out})
 edict       = proc.make_encoding_dict(dsall_natl)
 dsall_natl.to_netcdf(outname,encoding=edict)
 
-#%% now repeat for ERA5
+# =============================================
+#%% now repeat for ERA5 SST
+# =============================================
 
-vname = "sst"
+vname           = "sst"
+vname_out       = "sst"
+latname         = 'latitude'
+lonname         = 'longitude'
+timename        = 'time'
 
+dpath           = "/mnt/CMIP6/data/era5/reanalysis/single-levels/monthly-means/sea_surface_temperature/"
+ncsearch        = "%s*.nc" % dpath
+#outname         = outpath + "ERA5_%s_1979_2022_NATL.nc" % vname_out #Note this is the old naming convention, modified below to match HFF preprocessing
+outname         = outpath + "ERA5_sst_NAtl_1979to2022.nc"
 
-#%% Now do for SST
+# Get List of Files, open dataset
+nclist          = glob.glob(ncsearch)
+nclist.sort()
+nclist          = nclist[:] # Remove 1980 to avoid issue
+dsall           = xr.open_mfdataset(nclist)
+
+# Flip longitude
+dsall180    = proc.format_ds(dsall,lonname=lonname,latname=latname)
+dsall_natl  = proc.sel_region_xr(dsall180,natl_box)
+
+# Rename and save
+dsall_natl  = dsall_natl.rename({vname:vname_out})
+edict       = proc.make_encoding_dict(dsall_natl)
+dsall_natl.to_netcdf(outname,encoding=edict)
+
+# =============================================
+#%% Now do for OISST
+# =============================================
 
 dpath      = "/vortex/jetstream/climate/data/yokwon/NOAA_OI_0.25deg_v2.1/processed/monthly/"
 ncname     = "NOAA_OI_025deg_v2_1_AVHRR_monthly_1982_2020.nc"
@@ -130,20 +160,15 @@ dsall_natl.to_netcdf(outname,encoding=edict)
 
 # Need to do 2 crops (tropical pacific)
 # North Atlantic
+# =============================================
+#%% Load the data above and reprocess further (based on specs in calc_hff_general)
+# (Compute THFLX, Rename Files)
+# =============================================
 
-#%% Load the data above and reprocess (based on specs in calc_hff_general)
-
-# Load dataset
+# I.E. Compute THFLX ----------------------------------------------------------
 dpath       = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/"
 ds_lhflx    = xr.open_dataset(dpath + "ERA5_lhflx_1979_2022_NATL.nc").load()
 ds_shflx    = xr.open_dataset(dpath + "ERA5_shflx_1979_2022_NATL.nc").load()
-ds_sst      = xr.open_dataset(dpath + "OISST_SST_1982_2020_NATL.nc").load()
-
-# Check lat lon
-dx_oisst = ds_sst.lon.data[1:] - ds_sst.lon.data[:-1]
-print(dx_oisst)
-dx_era5  = ds_lhflx.lon.data[1:] - ds_lhflx.lon.data[:-1]
-print(dx_era5)
 
 # Add LHFLX and SHFLX for THFLX, then resave
 ds_thflx            = ds_lhflx.lhflx + ds_shflx.shflx
@@ -153,15 +178,31 @@ edict               = proc.make_encoding_dict(ds_thflx)
 outname_thflx_new   = dpath + "ERA5_thflx_NAtl_1982to2020.nc"
 ds_thflx.to_netcdf(outname_thflx_new,encoding=edict)
 
-# Resave SST with new naming conventions
+
+# Save version leading up to 2022
+ds_thflx            = ds_lhflx.lhflx + ds_shflx.shflx
+ds_thflx            = ds_thflx.rename('thflx')
+edict               = proc.make_encoding_dict(ds_thflx)
+outname_thflx_new   = dpath + "ERA5_thflx_NAtl_1979to2022.nc"
+ds_thflx.to_netcdf(outname_thflx_new,encoding=edict)
+
+
+# Resave SST (OISST) with new naming conventions ------------------------------
+ds_sst      = xr.open_dataset(dpath + "OISST_SST_1982_2020_NATL.nc").load()
 outname_sst_new = dpath + "OISST_sst_NAtl_1982to2020.nc"
 ds_sst = ds_sst.sel(time=slice('1982-01-01','2020-12-31'))
 edict               = proc.make_encoding_dict(ds_sst)
 ds_sst.to_netcdf(outname_sst_new,encoding=edict)
 
+# Check lat lon
+dx_oisst = ds_sst.lon.data[1:] - ds_sst.lon.data[:-1]
+print(dx_oisst)
+dx_era5  = ds_lhflx.lon.data[1:] - ds_lhflx.lon.data[:-1]
+print(dx_era5)
 
-#%% Regrid using xesmf
-
+# =============================================
+#%% Regrid using ERA5 using xesmf
+# =============================================
 import xesmf as xe
 import matplotlib.pyplot as plt
 
@@ -210,16 +251,16 @@ edict     = proc.make_encoding_dict(daproc)
 outname   = dpath + "ERA5_RegridOISST_thflx_NAtl_1982to2020.nc"
 daproc.to_netcdf(outname,encoding=edict)
 
+# =============================================
+#%% Get Sea Ice Concentration (daily?), OISST
+# =============================================
+dpath   = "/vortex/jetstream/climate/data/yokwon/NOAA_OI_0.25deg_v2.1/downloaded/"
+ncstr   = dpath + "icec.day.mean.*.nc"
 
-#%% Get Sea Ice Concentration (daily?)
-dpath = "/vortex/jetstream/climate/data/yokwon/NOAA_OI_0.25deg_v2.1/downloaded/"
-ncstr = dpath + "icec.day.mean.*.nc"
+nclist  = glob.glob(ncstr)
 
-nclist = glob.glob(ncstr)
-
-
-years = np.arange(1981,2021)
-nyrs = len(nclist)
+years   = np.arange(1981,2021)
+nyrs    = len(nclist)
 
 maxice     = []
 meanice    = []
@@ -271,22 +312,11 @@ outname     = outpath + "OISST_iceexceed005_monmean_1981_2020.nc"
 edict       = proc.make_encoding_dict(ds_cat)
 ds_cat.to_netcdf(outname,encoding=edict)
 
-
-
-#ds = xr.open_dataset(nclist[0])
-
-
-#dsreg = ds.sel(lat=slice(40,90))
-
-
-
-
-
 dsmax = ds.icec.max('time')
 
-
-
+# =============================================
 #%% Get CESM2 (copied from preproc_CESM2_PiControl)
+# =============================================
 
 datname       = "cesm2_pic"
 
