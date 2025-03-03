@@ -12,13 +12,14 @@ Inputs
 
     Region/Time-Cropped Flux and TS [time x (ens) x lat x lon180] : from [preproc_raw_inputs], located in datpath + proc/
     ENSO Index (for ENSO removal): from [compute_enso_index], located in datpath + enso/
+    
+    !! NOTE: Assumes time dimension in ENSO Index and Input Variables are of equal length!!
 
 
 Created on Mon Jun 24 14:16:29 2024
 
 @author: gliu
 """
-
 
 import numpy as np
 import xarray as xr
@@ -40,9 +41,6 @@ amvpath = "/home/glliu/00_Scripts/01_Projects/00_Commons/" # amv module
 sys.path.append(amvpath)
 import amv.proc as hf
 
-
-
-
 # -------------
 #%% User Edits
 # -------------
@@ -56,14 +54,14 @@ debug             = True # Set to true for debugging plots
 
 # Indicate Time Crop (for input)
 croptime          = True
-tstart            =  '1982-01-01'#'1920-01-01'#'0200-01-01' # "2006-01-01" # 
-tend              =  '2020-12-31'#'2005-12-31'#'2000-12-31' #"2101-01-01" # 
+tstart            =  '1979-01-01'#'1920-01-01'#'0200-01-01' # "2006-01-01" # 
+tend              =  '2021-12-31'#'2005-12-31'#'2000-12-31' #"2101-01-01" # 
 timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
 
 # Select time crop (for the estimate)
 croptime_estimate = False # Cut time right before estimating the heat flux feedback
-tcrop_start       = '1982-01-01'#"1970-01-01"#'1920-01-01' '2070-01-01'#
-tcrop_end         = '2020-12-31'#"1999-12-31"#'1970-01-01' '2099-12-31'#
+tcrop_start       = '1979-01-01'#"1970-01-01"#'1920-01-01' '2070-01-01'#
+tcrop_end         = '2021-12-31'#"1999-12-31"#'1970-01-01' '2099-12-31'#
 tcrop_fname       = ""
 if croptime_estimate:
     tcrop_fname     = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
@@ -73,7 +71,7 @@ bbox_name           = "NAtl" # "Global"#
 
 # Variables and Dataset Name
 vnames_in           = ['sst','thflx'] #['TS','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
-dataset_names       = ['OISST',"ERA5_RegridOISST"] #'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
+dataset_names       = ["ERA5","ERA5"]#['OISST',"ERA5_RegridOISST"] #'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
 # Note: Currently hard coded (unfortunately) to read the first dataset name as sst, second as flx
 #hflx_name           = "ERA" # set to None if dataset_name is same as hflx_name
 ensnum              = 1 #42
@@ -124,7 +122,6 @@ ensopath = datpath + "enso/"
 hffpath  = datpath + "hff/"
 maskpath = datpath + "masks/"
 procpath = datpath + "proc/"
-
 
 #%%
 
@@ -350,6 +347,19 @@ for ensnum in np.arange(1,nens+1):
             lon       = da[lonname].values
             lat       = da[latname].values
             times     = da[tname].values
+            
+            # Check if ENSO timeseries size matches the variable
+            ntime_da   = len(times)
+            ntime_enso = ensoid.shape[0] * ensoid.shape[1]
+            if ntime_da != ntime_enso:
+                print("Warning time length of variable (%i) != length of ENSO Index (%i)" % (ntime_da,ntime_enso))
+                print("\tCalculation will fail...")
+                # print("\tCrop will be attempted...")
+                # tstart_da = da.time[0].data
+                # if type(tstart_da) == np.ndarray:
+                #     ystart_da = tstart_da.astype('datetime64[Y]').astype(int) + 1970
+                    
+                
             
             # Remove ENSO
             vout,ensopattern,times = hf.remove_enso(invar,ensoid,ensolag,monwin,reduceyr=reduceyr,times=times)
