@@ -41,7 +41,7 @@ import pandas as pd
 
 
 #%% Import modules
-stormtrack = 0
+stormtrack = 1
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -68,18 +68,16 @@ import amv.proc as hf # Update hf with actual hfutils script, most relevant func
 
 # Select time crop (prior to preprocessing)
 croptime          = True # Cut the time prior to detrending, EOF, etc
-tstart            =  '1982-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
-tend              =  '2020-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
+tstart            =  '1979-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
+tend              =  '2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
 timestr           = "%sto%s" % (tstart[:4],tend[:4])
-
-
 
 # ENSO Parameters
 pcrem             = 3                   # PCs to calculate
 bbox              = [120, 290, -20, 20] # ENSO Bounding Box
 
 # Toggles and Options
-overwrite        = False # Set to True to overwrite existing output...
+overwrite        = True # Set to True to overwrite existing output...
 save_netcdf      = True # Set true to save netcdf version, false to save npz
 debug            = True # Debug toggle
 
@@ -100,6 +98,8 @@ debug            = True # Debug toggle
 maskpath            = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/"
 maskname            = 'cesm1_htr_5degbilinear_limask_0.3p_0.05p_year1920to2005_enssum.nc'#"cesm2_pic_limask_0.3p_0.05p.nc"
 
+
+
 # NOAA OISST
 dataset_name        = 'OISST'#"cesm2_pic"
 datpath             = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/"
@@ -111,14 +111,28 @@ concat_dim          = None#"time"
 keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
 detrend             = 1 # 1 to remove linear trend 
+outpath             = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
+
+
+# ERA5 SST
+dataset_name        = 'ERA5'#"cesm2_pic"
+datpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/"
+vname               = "sst"
+lonname             = "lon"
+latname             = "lat"
+timename            = "time"
+concat_dim          = None#"time"
+keepvars            = [timename,latname,lonname,vname]
+ensnum              = 1 # Irrelevant for now, need to add ensemble support...
+detrend             = 1 # 1 to remove linear trend 
+outpath             = ""
 
 # Mask Information (first run a maskmaker script/section such as that in preproc_CESM2_PiControl.py)
-maskpath = None
-maskname = None
+maskpath            = None
+maskname            = None
 
 # Output Path (Checks for an "enso" folder)
-#outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
-outpath  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
+outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
 
 
 #%%
@@ -130,6 +144,8 @@ if dataset_name == "cesm2_pic":
     searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
 elif dataset_name == "OISST": # Just grab tropical pacific
     searchstr = "%s%s*%s*TropicalPacific.nc" % (datpath,dataset_name,vname) # Searches for datpath + *LANDFRAC*.nc
+elif dataset_name == "ERA5": # Tropical Pacific Box
+    searchstr = "%s%s*%s*TropicalPacific*.nc" % (datpath,dataset_name,vname) # Searches for datpath + *LANDFRAC*.nc
 else:
     searchstr = "%s%s*%s*.nc" % (datpath,dataset_name,vname) # Searches for datpath + dataset_name*LANDFRAC*.nc"
 nclist    = glob.glob(searchstr)
@@ -286,7 +302,6 @@ if (len(query) < 1) or (overwrite == True):
             pcall_ens.append(pcall.copy())
             varexpall_ens.append(varexpall.copy())
         
-        
         eofall    = np.array(eofall_ens)
         pcall     = np.array(pcall_ens)
         varexpall = np.array(varexpall_ens)
@@ -319,8 +334,6 @@ if (len(query) < 1) or (overwrite == True):
         
         years   = np.arange(int(len(times)/12))
         pcnums  = np.arange(1,pcrem+1)
-        
-        
         
         # Make Dictionary
         coords_eofs   = dict(lat=lat,lon=lon,month=mons,pc=pcnums) # 
