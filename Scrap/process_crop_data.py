@@ -113,12 +113,12 @@ timename        = 'time'
 dpath           = "/mnt/CMIP6/data/era5/reanalysis/single-levels/monthly-means/sea_surface_temperature/"
 ncsearch        = "%s*.nc" % dpath
 #outname         = outpath + "ERA5_%s_1979_2022_NATL.nc" % vname_out #Note this is the old naming convention, modified below to match HFF preprocessing
-outname         = outpath + "ERA5_sst_NAtl_1979to2022.nc"
+outname         = outpath + "ERA5_sst_NAtl_1979to2021.nc"
 
 # Get List of Files, open dataset
 nclist          = glob.glob(ncsearch)
 nclist.sort()
-nclist          = nclist[:] # Remove 1980 to avoid issue
+nclist          = nclist[:-1] # Remove 2022 since it only goes up until Sept
 dsall           = xr.open_mfdataset(nclist)
 
 # Flip longitude
@@ -129,6 +129,14 @@ dsall_natl  = proc.sel_region_xr(dsall180,natl_box)
 dsall_natl  = dsall_natl.rename({vname:vname_out})
 edict       = proc.make_encoding_dict(dsall_natl)
 dsall_natl.to_netcdf(outname,encoding=edict)
+
+# Also Crop the tropical Pacific
+dsall360  = proc.format_ds(dsall,lonname=lonname,latname=latname,lon180=False)
+dsall_trop = proc.sel_region_xr(dsall360,enso_box)
+edict      = proc.make_encoding_dict(dsall_trop)
+outname    = outpath + "ERA5_sst_TropicalPacific_1979to2021.nc"
+dsall_trop.to_netcdf(outname,encoding=edict)
+
 
 # =============================================
 #%% Now do for OISST
@@ -179,13 +187,13 @@ outname_thflx_new   = dpath + "ERA5_thflx_NAtl_1982to2020.nc"
 ds_thflx.to_netcdf(outname_thflx_new,encoding=edict)
 
 
-# Save version leading up to 2022
+# Save version leading up to 2021
 ds_thflx            = ds_lhflx.lhflx + ds_shflx.shflx
 ds_thflx            = ds_thflx.rename('thflx')
+ds_thflx            = ds_thflx.sel(time=slice('1982-01-01','2021-12-31'))
 edict               = proc.make_encoding_dict(ds_thflx)
-outname_thflx_new   = dpath + "ERA5_thflx_NAtl_1979to2022.nc"
+outname_thflx_new   = dpath + "ERA5_thflx_NAtl_1979to2021.nc"
 ds_thflx.to_netcdf(outname_thflx_new,encoding=edict)
-
 
 # Resave SST (OISST) with new naming conventions ------------------------------
 ds_sst      = xr.open_dataset(dpath + "OISST_SST_1982_2020_NATL.nc").load()
