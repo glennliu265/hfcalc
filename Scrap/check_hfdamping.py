@@ -47,7 +47,7 @@ else:
 
     # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
     datpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
-    figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220511/"
+    figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20250305/"
 
     # hfcalc_path = "/stormtrack/home/glliu/00_Scripts/01_Projects/01_AMV/01_hfdamping/hfcalc/" # hfcalc module
 
@@ -66,7 +66,7 @@ bbplot = [-80, 0, 35, 75]
 mons3 = proc.get_monstr()
 
 # Paths
-figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/02_Figures/20250221/"
+figpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/02_Figures/20250305/"
 proc.makedir(figpath)
 
 # Load Sea Ice Masks
@@ -88,7 +88,7 @@ cints_adt = np.arange(-100, 110, 10)
 # +1 due to inclusive, -2 and -1 due to year window, *3 due to month window
 dof = (2020-1982 + 1 - 2 - 1) * 3
 
-# %% HFF Estimates
+# %% HFF Estimates (OISST-ERA5)
 
 dpath = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
 ncname_obs = "ERA5_RegridOISST_hfdamping_NAtl_1982to2020_ensorem1_detrend1.nc"
@@ -101,11 +101,34 @@ lon = ds.lon
 lat = ds.lat
 thflx_damping = ds.thflx_damping / dt * -1
 
+
 cov = ds.cov
 autocov = ds.autocov
 
 cc = ds.sst_flx_crosscorr
 ac = ds.sst_autocorr
+
+
+# Copy OISST to another file
+ds_oisst = ds.copy()
+thff_oisst = thflx_damping.copy()
+
+#%% HFF Estimates (ERA5 Only)
+
+ncname_era5 ="ERA5_hfdamping_NAtl_1979to2021_ensorem1_detrend1.nc"
+ds_era5     = xr.open_dataset(dpath + ncname_era5)
+
+dt = 3600*24  # *30 #Effective Processing Period of 1 day
+
+
+lone = ds_era5.lon
+late = ds_era5.lat
+thflx_damping_era5 = ds_era5.thflx_damping / dt * -1
+
+# Copy ERA5
+thff_era5 = thflx_damping_era5.copy()
+
+
 
 # %% Plot HFF Estimates with sea ice
 
@@ -345,6 +368,64 @@ def flip_mask(mask,landmask):
 
 acmask_inv = flip_mask(acmask,landmask)
 ccmask_inv = flip_mask(ccmask,landmask)
+
+#%%
+
+def compute_inv_sigmask(ds):
+    # Basically Wrap the Above Code Block into a function
+    rflx = ds.sst_flx_crosscorr
+    rsst = ds.sst_autocorr
+    hff  = ds.thflx_damping
+    thflx_damping = hff
+    
+    setdict = {  # Taken from hfcalc_params
+        'ensorem': 1,      # 1=enso removed, 0=not removed
+        'ensolag': 1,      # Lag Applied toENSO and Variable before removal
+        'monwin': 3,      # Size of month window for HFF calculations
+        'detrend': 1,      # Whether or not variable was detrended
+        'tails': 2,      # tails for t-test
+
+        'p': 0.05,   # p-value for significance testing
+        'sellags': [0,],   # Lags included (indices, so 0=lag1)
+        'lagstr': "lag1",  # Name of lag based on sellags
+        # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
+        'method': 4
+    }
+    
+    st = time.time()
+    dampingmasked, freq_success, sigmask = scm.prep_HF(hff, rsst, rflx,
+                                                       setdict['p'], setdict['tails'], dof, setdict['method'],
+                                                       returnall=True)  # expects, [month x lag x lat x lon], should generalized with ensemble dimension?
+    print("Completed significance testing in %.2fs" % (time.time()-st))
+    
+    
+    # Remake Mask such that 1 = insignificant
+    landmask = xr.where(np.isnan(thflx_damping.isel(month=0, lag=0)), np.nan, 1)
+
+    sigmask_inv = np.isnan(sigmask.copy())
+    sigmask_inv = sigmask_inv * landmask.data[None, None, :, :]
+
+
+    # Make Masks for AC and CC Only
+    _,_,acmask = scm.prep_HF(hff, rsst, rflx,
+                            setdict['p'], setdict['tails'], dof, 2,
+                            returnall=True)
+    _,_,ccmask = scm.prep_HF(hff, rsst, rflx,
+                            setdict['p'], setdict['tails'], dof, 3,
+                            returnall=True)
+    def flip_mask(mask,landmask):
+        mask_inv = np.isnan(mask.copy())
+        mask_inv = mask_inv * landmask.data[None, None, :, :]
+        return mask_inv
+
+    acmask_inv = flip_mask(acmask,landmask)
+    ccmask_inv = flip_mask(ccmask,landmask)
+    
+    return sigmask_inv,acmask_inv,ccmask_inv
+
+masks_oisst = compute_inv_sigmask(ds_oisst)
+masks_era5  = compute_inv_sigmask(ds_era5)
+    
     
 
 # %% Plot the significance testing results (Copied HFF plot froma bove with sea ice)
@@ -447,3 +528,89 @@ plt.suptitle("Month %s, Lag %i" % (mons3[imon], ilag+1), fontsize=42)
 outname = figpath + \
     "OISST_ERA5_THFF_bycomponent_lag%i_mon%02i_sigmask.png" % (ilag+1, imon+1)
 plt.savefig(outname, dpi=150, bbox_inches='tight', transparent=True)
+
+#%% Compare HFF (OISST and ERA5)
+
+
+
+
+ilag = 0
+
+for imon in range(12):
+    fig, axs, _ = viz.init_orthomap(1, 2, bbplot, figsize=(16, 6.5))
+    
+    for ii in range(2):
+        ax = axs[ii]
+        ax = viz.add_coast_grid(ax, bbplot, fill_color='k', proj=proj)
+        
+        
+        if ii == 0:
+            plotvar     = thff_oisst.isel(month=imon,lag=ilag)#ds_oisst.thflx_damping.isel(month=imon,lag=ilag) * -1 / dt
+            pname       = "$\lambda^{THFLX}$ (OISST and ERA5)"
+            plotmask    = masks_oisst[0]#1#ccmask_inv
+            
+            vlims = [-45, 45]
+            
+        elif ii == 1:
+            plotvar     = thff_era5.isel(month=imon,lag=ilag)#ds_era5.thflx_damping.isel(month=imon,lag=ilag) * -1 / dt
+            pname       = "$\lambda^{THFLX}$ (ERA5)"
+            plotmask    = masks_era5[0]#1#acmask_inv
+            
+            vlims = [-45, 45]
+        
+        pcm = ax.pcolormesh(plotvar.lon, plotvar.lat, plotvar, transform=proj, cmap='cmo.balance',
+                            vmin=vlims[0], vmax=vlims[1])
+        
+        
+        # Plot the dots
+        # Plot significant points
+        plotmsk1 = plotmask[imon, ilag, :, :]
+        # Had to reverse and transpose to lon x lat
+        viz.plot_mask(plotvar.lon, plotvar.lat, plotmsk1.T, reverse=True, ax=ax, proj=proj, geoaxes=True,
+                      markersize=.4, color='gray')
+        
+        # # Plot Sea Ice
+        plotvar = ds_masks.mask_mon
+        cl = ax.contour(plotvar.lon, plotvar.lat,
+                        plotvar, colors="yellow",
+                        linewidths=2, transform=proj, levels=[0, 1], zorder=-1)
+        ax.clabel(cl, fontsize=12)
+    
+        # Plot the SSH
+        plotvar = ds_adt.isel(time=imon)
+        cl = ax.contour(plotvar.lon, plotvar.lat, plotvar.adt*100, colors="k",
+                        linewidths=0.75, transform=proj, levels=cints_adt)
+        ax.clabel(cl)
+        
+    
+        viz.hcbar(pcm, ax=ax, pad=0.01)
+    
+        ax.set_title(pname, fontsize=16)
+    plt.suptitle("Month %s, Lag %i" % (mons3[imon], ilag+1), fontsize=42)
+    
+    outname = figpath + \
+        "OISST_v_ERA5_THFF_estimates_lag%i_mon%02i_sigmask.png" % (ilag+1, imon+1)
+    plt.savefig(outname, dpi=150, bbox_inches='tight', transparent=True)
+
+
+#%% Check Differences at a location
+
+lonf        = -30
+latf        = 50
+fig,ax      = viz.init_monplot(1,1,figsize=(8.5,3.5))
+
+oisst_pt    = thff_oisst.sel(lon=lonf,lat=latf,method='nearest').isel(lag=ilag)
+era5_pt     = thff_era5.sel(lon=lonf,lat=latf,method='nearest').isel(lag=ilag)
+
+ax.plot(mons3,oisst_pt,c="blue",label="OISST and ERA5")
+
+ax.plot(mons3,era5_pt,c="red",ls='dashed',label="ERA5 Only")
+ax.legend()
+
+#%% Lets Calculate the wintertime ACF
+
+
+
+
+
+
