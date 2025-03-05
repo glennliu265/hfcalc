@@ -55,6 +55,9 @@ import amv.loaders as dl
 outpath     = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/SPG_Box/"
 bbox_spg    = [-80,0,30,70] # SPG Crop for all Datasets
 
+outpath_spg = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/spg_data/"
+
+
 #%%  Preprocessing Section
 """
 Lets Load each dataset and crop to this region
@@ -66,7 +69,6 @@ Rules
 """
 #%% Start with OISST
 
-outpath_spg = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/spg_data/"
 
 # OISST
 dpath_proc  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/proc/"
@@ -165,6 +167,23 @@ outname     = outpath_spg + "cesm1_pic_SPG.nc"
 edict       = proc.make_encoding_dict(ds_sst)
 ds_sst.to_netcdf(outname,encoding=edict)
 
+#%% Redo for ERA5
 
+dpath       = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/"
+ncname      = dpath + "ERA5_sst_NAtl_1979to2021.nc"
+ds          = xr.open_dataset(ncname)
 
+ds          = proc.format_ds(ds)
 
+# Convert to Celsius
+if np.any(ds > 200):
+    print("Converting to Celsius")
+    ds = ds - 273.15
+    
+    
+ds_sst      = ds.sst.transpose('time','lat','lon')
+ds_sst      = proc.sel_region_xr(ds_sst,bbox_spg)
+
+outname     = outpath_spg + "ERA5_SPG.nc"
+edict       = proc.make_encoding_dict(ds_sst)
+ds_sst.to_netcdf(outname,encoding=edict)
