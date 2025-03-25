@@ -14,7 +14,6 @@ Script Sections
 (2) Detrend and Deseason
 (3) Compute the ENSO indices
 
-
 Output (netcdf form):
     
     eofs    : [lat x lon x month x pc]  - EOF Patterns
@@ -36,9 +35,7 @@ import time
 import sys
 import cartopy.crs as ccrs
 import glob
-
 import pandas as pd
-
 
 #%% Import modules
 stormtrack = 1
@@ -58,10 +55,9 @@ else:
     # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
     datpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
     figpath =  "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/02_Figures/20220511/"
+
 from amv import proc,viz
 import scm
-
-
 import amv.proc as hf # Update hf with actual hfutils script, most relevant functions
 
 #%% ENSO Calculation and Cropping Options
@@ -69,7 +65,7 @@ import amv.proc as hf # Update hf with actual hfutils script, most relevant func
 # Select time crop (prior to preprocessing)
 croptime          = True # Cut the time prior to detrending, EOF, etc
 tstart            =  '1979-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
-tend              =  '2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
+tend              =  '2024-12-31'#'2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
 timestr           = "%sto%s" % (tstart[:4],tend[:4])
 
 # ENSO Parameters
@@ -126,6 +122,7 @@ keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
 detrend             = 1 # 1 to remove linear trend 
 outpath             = ""
+yr_range            = "1979to2024" # Other topin is 1979to2021
 
 # Mask Information (first run a maskmaker script/section such as that in preproc_CESM2_PiControl.py)
 maskpath            = None
@@ -145,7 +142,9 @@ if dataset_name == "cesm2_pic":
 elif dataset_name == "OISST": # Just grab tropical pacific
     searchstr = "%s%s*%s*TropicalPacific.nc" % (datpath,dataset_name,vname) # Searches for datpath + *LANDFRAC*.nc
 elif dataset_name == "ERA5": # Tropical Pacific Box
-    searchstr = "%s%s*%s*TropicalPacific*.nc" % (datpath,dataset_name,vname) # Searches for datpath + *LANDFRAC*.nc
+    if yr_range is None:
+        yr_range = "1979to2021"
+    searchstr = "%s%s*%s*TropicalPacific_%s.nc" % (datpath,dataset_name,vname,yr_range) # Searches for datpath + *LANDFRAC*.nc
 else:
     searchstr = "%s%s*%s*.nc" % (datpath,dataset_name,vname) # Searches for datpath + dataset_name*LANDFRAC*.nc"
 nclist    = glob.glob(searchstr)
@@ -274,6 +273,7 @@ st = time.time()
 # Check if ENSO has already been calculated and skip if so
 proc.makedir("%senso/"% datpath) 
 savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.nc" % (outpath,dataset_name,detrend,pcrem,timestr)
+
 # if lensflag:
 #     savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
 query = glob.glob(savename)
