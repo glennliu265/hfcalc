@@ -109,12 +109,12 @@ outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NA
 
 # Save Net Fluxes
 edict   = proc.make_encoding_dict(da_qnet)
-ncname  = outpath + "ERA5_qnet_NAtl_1979_2024.nc"
+ncname  = outpath + "ERA5_qnet_NAtl_1979to2024.nc"
 da_qnet.to_netcdf(ncname,encoding=edict)
 
 # Save all fluxes
 edict   = proc.make_encoding_dict(da_all)
-ncname  = outpath + "ERA5_All_Fluxes_NAtl_1979_2024.nc"
+ncname  = outpath + "ERA5_All_Fluxes_NAtl_1979to2024.nc"
 da_all.to_netcdf(ncname,encoding=edict)
 
 # ============================================================================
@@ -143,7 +143,7 @@ dsall_trop.to_netcdf(outname,encoding=edict)
 # Grab NAtl region
 ds180           = proc.format_ds(ds.sst,lonname=lonname,latname=latname,timename=timename,lon180=True)
 ds_natl         = proc.sel_region_xr(ds180,natl_box)
-ncname          = outpath + "ERA5_sst_NAtl_1979_2024.nc"
+ncname          = outpath + "ERA5_sst_NAtl_1979to2024.nc"
 ds_natl.to_netcdf(ncname,encoding=edict)
 
 
