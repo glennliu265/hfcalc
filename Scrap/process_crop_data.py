@@ -379,3 +379,67 @@ edict   = proc.make_encoding_dict(ds_reg)
 ds_reg.to_netcdf(outname,encoding=edict)
 
 print(outname)
+
+
+#%% Load and process land sea mask 
+# **Note something seemed to be up with stormtrack so I moved this locally to work with (see section below)
+
+
+# Get List of NetCDF files
+vname    = 'lsm'
+latname  = 'latitude'
+lonname  = 'longitude'
+timename = 'time'
+dpath    = "/mnt/CMIP6/data/era5/reanalysis/single-levels/monthly-means/land_sea_mask/"
+ncsearch = "%s*.nc" % dpath
+
+vname_out = "mask"
+outname   = outpath + "ERA5_land_sea_mask_1979_2022_NATL.nc"
+
+# Get List of Files, open dataset
+nclist      = glob.glob(ncsearch)
+nclist.sort()
+dsall       = xr.open_mfdataset(nclist)
+
+# Flip longitude
+dsall180    = proc.format_ds(dsall,lonname=lonname,latname=latname)
+dsall_natl  = proc.sel_region_xr(dsall180,natl_box)
+
+# Rename and save
+dsall_natl  = dsall_natl.rename({vname:vname_out})
+edict       = proc.make_encoding_dict(dsall_natl)
+dsall_natl.to_netcdf(outname,encoding=edict)
+
+
+#%% Local Processing
+
+dpath2 = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
+dslist = ["era5_1980_land_sea_mask.nc","era5_2020_land_sea_mask.nc"]
+
+ds1 = xr.open_dataset(dpath2 + dslist[0]).load()
+ds2 = xr.open_dataset(dpath2 + dslist[1]).load()
+#dsall = xr.open_dataset(dpath2 + dslist[ii] for ii in range(2)).load()
+
+
+ds_in       = [ds1,ds2]
+dsall180    = [proc.format_ds(ds,lonname=lonname,latname=latname) for ds in ds_in]
+dsall_natl  = [proc.sel_region_xr(ds,natl_box) for ds in dsall180]
+
+
+
+mask_80 = xr.where(dsall_natl[0].lsm.max('time') > 0,np.nan,1)
+mask_20 = xr.where(dsall_natl[1].lsm.max('time') > 0,np.nan,1)
+
+mask_all = mask_80.data * mask_20.data
+lat      = dsall_natl[0].lat.data
+lon      = dsall_natl[0].lon.data
+
+
+dims  = dict(lat=lat,lon=lon)
+daout = xr.DataArray(mask_all,dims=dims,coords=dims,
+                     name='land_mask')
+
+edict       = proc.make_encoding_dict(daout)
+outpath     = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/"
+outname     = outpath + "ERA5_land_mask_1980_and_2020_NATL.nc"
+daout.to_netcdf(outname,encoding=edict)
