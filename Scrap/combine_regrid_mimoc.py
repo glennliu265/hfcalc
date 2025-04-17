@@ -114,6 +114,8 @@ regridder = xe.Regridder(ds,ds_out,method,periodic=False)
 # Regrid
 daproc    = regridder(ds) # Need to input dataarray
 
+daproc    = daproc.rename("mld")
+
 edict     = proc.make_encoding_dict(daproc)
 outname   = dpath_proc + "MIMOC_RegridERA5_mld_NAtl_Climatology.nc"
 
@@ -122,15 +124,11 @@ daproc.to_netcdf(outname,encoding=edict)
 
 #%% Plot Sample Plot
 
-bbplot = [-80, 0, 35, 75]
-proj   = ccrs.PlateCarree()
-imon   = 1
-mons3 = proc.get_monstr()
-# for imon in range(12):
-    
-cints = np.arange(0,550,50)
-
-
+bbplot  = [-80, 0, 35, 75]
+proj    = ccrs.PlateCarree()
+imon    = 1
+mons3   = proc.get_monstr()
+cints   = np.arange(0,550,50)
 
 fig, axs, _ = viz.init_orthomap(1, 2, bbplot, figsize=(14, 6))
 
@@ -152,7 +150,6 @@ for a,ax in enumerate(axs):
     cl  = ax.contour(plotvar.lon,plotvar.lat,plotvar,transform=proj,levels=cints,
                      colors="k",linewidths=0.75)
     ax.clabel(cl)
-    
     
 cb = viz.hcbar(pcm,ax=axs.flatten(),pad=0.01)
 cb.set_label("%s Mixed Layer Depth [m]" % mons3[imon])
