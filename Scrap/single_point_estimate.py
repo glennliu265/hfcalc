@@ -137,8 +137,6 @@ dt                    = 60*60*24
 damping               = hff_out['damping'] / dt * -1
 
 
-
-
 lbd_a = damping[:,0,:,:].squeeze() # Just Take Lag 1
 
 

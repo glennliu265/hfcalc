@@ -238,7 +238,7 @@ for mon in range(1,13,1):
     cb.ax.tick_params(labelsize=fsz_ticks)
     
     
-        
+    
     savename = "%sStdev_Ratio_Stochmod_ERA5_Mon%s.png" % (figpath,mon)
     plt.savefig(savename,dpi=150,bbox_inches='tight')
 
@@ -659,10 +659,7 @@ acf_sm      = ds_acf_sm2.acf.isel(thres=0,ens=0)
 
 
 #%% Plot for ERA5 or SM experiment indicated above
-
-
 plotnow   = "SM"
-
 bboxspg   = [-80,0,30,65]
 fsz_ticks = 16
 fzs_axis  = 18
@@ -767,9 +764,6 @@ dsmld = xr.open_dataset(mldnc).load()
 
 hpt = proc.selpt_ds(dsmld,lonf,latf)
 hpt.plot()
-
-
-
 
 # ----
 

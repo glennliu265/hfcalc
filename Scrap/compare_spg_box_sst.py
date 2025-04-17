@@ -242,7 +242,6 @@ ax = viz.add_coast_grid(ax, bbplot, fill_color='lightgray',
 # pcm = ax.pcolormesh(lon, lat, plotvar, transform=proj, cmap='cmo.balance',
 #                     vmin=-55, vmax=55, zorder=-1)
 
-
 # Plot the Box
 viz.plot_box(bbox_yeager,proj=proj,color="purple",linewidth=3,linestyle='dashed')
 

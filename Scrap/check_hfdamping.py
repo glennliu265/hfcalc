@@ -532,8 +532,6 @@ plt.savefig(outname, dpi=150, bbox_inches='tight', transparent=True)
 #%% Compare HFF (OISST and ERA5)
 
 
-
-
 ilag = 0
 
 for imon in range(12):
