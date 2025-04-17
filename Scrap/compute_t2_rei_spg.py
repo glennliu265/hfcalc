@@ -249,6 +249,7 @@ dswint_r1 = [pointwise_lag_manual(ds,lag) for ds in ds_winter]
 
             
 #%% Visualize the Wintertime R1 Patterns
+bbox_yeager = [-50,-10,50,60] # Original
 
 nn         = 0
 for nn in range(ndatasets):
@@ -298,6 +299,128 @@ for nn in range(ndatasets):
     ax.set_title("%s (%s)" % (dset_names[nn],ystrs[nn]))
     outname = "%s%s_Wintertime_R1.png" % (figpath,dset_names[nn])
     plt.savefig(outname,dpi=150,bbox_inches='tight',transparent=True)
+
+# =================================
+#%% Load + compute OISST REI and compare with MLD (copied from check_acf)
+
+
+dpath2  = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/"
+nc      =  dpath2 + "OISST_1982_2020_ACF_lag00to60_ALL_ensALL.nc"
+ds      = xr.open_dataset(nc).load()
+acfs = ds.isel(thres=0,ens=0).acf.squeeze()
+
+def calc_rei(x): return proc.calc_remidx_xr(x, return_rei=True)
+
+#Runs in approx 160 sec
+st = time.time()
+# Apply looping through basemonth, lon, lat. ('lon', 'lat', 'mon', 'rem_year')
+rei_mon = xr.apply_ufunc(
+    calc_rei,
+    acfs,
+    input_core_dims=[['lags']],
+    output_core_dims=[['rem_year',]],
+    vectorize=True,
+)
+
+print("Function applied in in %.2fs" % (time.time()-st))
+
+# Add numbering based on the re-emergence year
+rei_mon['rem_year'] = np.arange(1, 1+len(rei_mon.rem_year))
+
+
+
+t2 = proc.calc_T2(acfs,axis=-1,ds=True)
+
+
+#%% Plot the Re-emergence Index with Month
+imon    = 2
+plotmax = False
+
+cints_mld  = np.arange(0,1100,50)
+plot_range = True
+
+#for imon in range(12):
+fig, ax, _ = viz.init_orthomap(1, 1, bbplot, figsize=(14, 6))
+ax = viz.add_coast_grid(ax, bbplot, fill_color='lightgray',
+                        proj=proj, line_color="dimgray")
+
+plotvar = rei_mon.isel(mons=imon,rem_year=0)
+lon     = ds.lon
+lat     = ds.lat
+pcm = ax.pcolormesh(lon, lat, plotvar.T, transform=proj, cmap='cmo.dense',
+                    vmin=0, vmax=0.75, zorder=-1)
+
+# # Plot Sea Ice
+plotvar = ds_masks.mask_mon
+cl = ax.contour(plotvar.lon, plotvar.lat,
+                plotvar, colors="yellow",
+                linewidths=2, transform=proj, levels=[0, 1], zorder=-1)
+ax.clabel(cl, fontsize=12)
+
+# # plot ADT
+# plotvar = ds_adt.isel(time=imon)
+# cl = ax.contour(plotvar.lon, plotvar.lat, plotvar.adt*100, colors="k",
+#                 linewidths=0.75, transform=proj, levels=cints_adt)
+# ax.clabel(cl)
+
+
+# Plot MLD
+if plot_range:
+    plotvar = ds_mld.mld.max('month') - ds_mld.mld.min('month')
+    mldstr  = "Range"
+else:
+    plotvar = ds_mld.mld.isel(month=imon)
+    mldstr  = ""
+    
+cl      = ax.contour(plotvar.lon, plotvar.lat, plotvar, colors="k",
+                linewidths=0.75, transform=proj,levels=cints_mld,linestyles='solid')
+ax.clabel(cl)
+
+ax.set_title("Re-emergence Index, %s" % (mons3[imon]), fontsize=16)
+cb = viz.hcbar(pcm, ax=ax, pad=0.01, fraction=0.045)
+cb.set_label(
+    "$REI$", fontsize=14)
+cb.ax.tick_params(labelsize=14)
+
+# Plot the Box
+#viz.plot_box(bbox_yeager,proj=proj,color="purple",linewidth=3,linestyle='dashed')
+
+outname = figpath + "OISST_REI_lagmax%02i_MLD%s_mon%02i.png" % (acfs.lags.data[-1], mldstr,imon+1)
+plt.savefig(outname, dpi=150, bbox_inches='tight', transparent=True)
+
+#%% Plot Relationships (MLD RANGE vs T2)
+
+
+mld_offset = ds_mld.mld.data[:,1:,1:].transpose(2,1,0)
+mld_range  = mld_offset.max(-1) - mld_offset.min(-1)
+mld_max    = mld_offset.max(-1)
+t2_wint    = t2[:,:,[0,1,2]].mean(-1)
+rei_wint   = rei_mon.isel(mons=[0,1,2],rem_year=1).mean('mons')
+
+xx,yy      = np.meshgrid(rei_mon.lon.data,rei_mon.lat.data)
+fig,axs     = plt.subplots(1,2,constrained_layout=True,figsize=(12,6))
+
+#sc         = ax.scatter(t2_wint,mld_range,s=25,alpha=0.15)
+ax = axs[0]
+sc         = ax.scatter(mld_range,t2_wint,c=xx.flatten(),s=25,alpha=0.15)
+ax.set_xlabel("MLD Range (meters)",fontsize=16)
+ax.set_ylabel("T2 (Months)",fontsize=16)
+
+
+ax = axs[1]
+sc         = ax.scatter(mld_range,rei_wint,c=xx.flatten(),s=25,alpha=0.15)
+ax.set_xlabel("MLD Range (meters)",fontsize=16)
+ax.set_ylabel("REI",fontsize=16)
+
+#sc = ax.scatter(t2_wint,rei_wint,c=yy.flatten(),s=25,alpha=0.15)
+
+#sc = ax.scatter(t2_wint,rei_wint,c=yy.flatten(),s=0,alpha=1)
+
+viz.hcbar(sc,ax=axs.flatten())
+
+#sc = ax.scatter(t2_wint,rei_wint,c=yy.flatten(),s=25,alpha=0.15)
+
+
 
 #%%
 
