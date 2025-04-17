@@ -20,7 +20,6 @@ import tqdm as tqdm
 import sys
 import cartopy.crs as ccrs
 
-
 #%% Module Loader
 
 # stormtrack
@@ -145,6 +144,29 @@ ds180           = proc.format_ds(ds.sst,lonname=lonname,latname=latname,timename
 ds_natl         = proc.sel_region_xr(ds180,natl_box)
 ncname          = outpath + "ERA5_sst_NAtl_1979to2024.nc"
 ds_natl.to_netcdf(ncname,encoding=edict)
+
+
+#%% Resave pre-satelite era chunk for analysis
+
+outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/proc/"
+dpath           = "/stormtrack/data4/glliu/01_Data/Reanalysis/ERA5/"
+
+ncname = dpath + "sst_1940_1978.nc"
+
+
+ds              = xr.open_dataset(ncname).load()
+
+latname         = 'latitude'
+lonname         = 'longitude'
+timename        = 'valid_time'
+
+# Grab NAtl region
+ds180           = proc.format_ds(ds.sst,lonname=lonname,latname=latname,timename=timename,lon180=True)
+ds_natl         = proc.sel_region_xr(ds180,natl_box)
+edict           = proc.make_encoding_dict(ds_natl)
+ncname          = outpath + "ERA5_sst_NAtl_1940to1978.nc"
+ds_natl.to_netcdf(ncname,encoding=edict)
+
 
 
 #%%
