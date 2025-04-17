@@ -411,12 +411,20 @@ rei_wint = rei_mon.isel(mons=mons_sel,rem_year=0).mean('mons').data.flatten()
 t2_wint  = t2[:,:,mon_sel].mean(-1).flatten()
 
 
+xx,yy = np.meshgrid(rei_mon.lon.data,rei_mon.lat.data)
 
-fig,ax   = plt.subplots(1,1,constrained_layout=True)
 
-ax.scatter(t2_wint,rei_wint,s=25,alpha=0.15)
+fig,ax   = plt.subplots(1,1,constrained_layout=True,figsize=(12,12))
 
-ax.set_xlabel("T2 (Months)")
-ax.set_ylabel("REI Index (Correlation)")
+sc = ax.scatter(t2_wint,rei_wint,c=yy.flatten(),s=25,alpha=0.15)
+
+sc = ax.scatter(t2_wint,rei_wint,c=yy.flatten(),s=0,alpha=1)
+
+ax.set_xlabel("T2 (Months)",fontsize=16)
+ax.set_ylabel("REI Index (Correlation)",fontsize=16)
+
+viz.hcbar(sc,ax=ax)
+
+sc = ax.scatter(t2_wint,rei_wint,c=yy.flatten(),s=25,alpha=0.15)
 
 
