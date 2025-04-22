@@ -58,26 +58,35 @@ import amv.loaders as dl
 #%% Load everything
 
 
-
+# Old Version
 dpath       = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/"
 nc_sst      = dpath + "ERA5_sst_NAtl_1979to2021.nc" #proc/"
 nc_thflx    = dpath + "ERA5_thflx_NAtl_1979to2021.nc"
 nc_enso     = dpath + "enso/ERA5_ENSO_detrend1_pcs3_1979to2021.nc"
 nc_mld      = dpath + "MIMOC_RegridERA5_mld_NAtl_Climatology.nc"
 
+#Qnet Version
+dpath       = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
+nc_sst      = dpath + "ERA5_sst_NAtl_1979to2024.nc" #proc/"
+nc_thflx    = dpath + "ERA5_qnet_NAtl_1979to2024.nc"
+nc_enso     = dpath + "enso/ERA5_ENSO_detrend1_pcs3_1979to2024.nc"
+nc_mld      = dpath + "MIMOC_RegridERA5_mld_NAtl_Climatology.nc"
 
+# Open and Merge Datasets
 ds_sst      = xr.open_dataset(nc_sst).load()
 ds_thflx    = xr.open_dataset(nc_thflx).load()
 ds_enso     = xr.open_dataset(nc_enso).load()
 ds_mld      = xr.open_dataset(nc_mld).load()
-
 ds_all      = xr.merge([ds_sst,ds_thflx,ds_enso,ds_mld])
+
+# Select BBox
+bbox_yeager = [-50,-10,50,60] # Original
+bbsel  = bbox_yeager
 
 #%%
 
 # Limit to region and take area average
-bbox_yeager = [-50,-10,50,60] # Original
-ds_all_reg  = proc.sel_region_xr(ds_all,bbox_yeager)
+ds_all_reg  = proc.sel_region_xr(ds_all,bbsel)
 ds_regavg   = proc.area_avg_cosweight(ds_all_reg)
 dtmon       = 60*60*24
 
