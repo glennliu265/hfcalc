@@ -57,7 +57,8 @@ proj = ccrs.PlateCarree()
 bbplot = [-80, 0, 35, 75]
 mons3 = proc.get_monstr()
 
-
+figpath = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/02_Figures/20250501/"
+proc.makedir(figpath)
 
 
 # =========================
@@ -93,6 +94,17 @@ hff_era5 = damping_era5.copy()
 #%% Perform significance testing
 
 # Set Significance calculation settings
+"""
+Some Options for Signifiance Testing
+
+pilot      : Same as was used for the SSS Paper
+noPositive : Just set positive HFF to zero
+p10        : Use p = 0.10
+
+
+"""
+signame = "noPositive"#"pilot" #"noPositive" # 
+print("Significance Testing Option is: %s" % (signame))
 
 hff   = damping_era5.copy()
 rsst  = ds_era5.sst_autocorr.copy()
@@ -107,9 +119,17 @@ setdict = {  # Taken from hfcalc_params
     'p': 0.05,   # p-value for significance testing
     'sellags': [0,],   # Lags included (indices, so 0=lag1)
     'lagstr': "lag1",  # Name of lag based on sellags
-    # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
+    # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values),6, zero out negative values
     'method': 4
 }
+
+
+if signame == "pilot":
+    setdict['method'] = 4 # Apply Significance Testing to Both
+elif signame == "noPositive":
+    setdict['method'] = 6 # Apply Significance Testing to Both
+elif signame == "p10":
+    setdict['p'] = 0.10
 
 # dof was set above
 
@@ -126,9 +146,47 @@ dampingout = dampingmasked[:,setdict['sellags'],:,:].squeeze()
 dampingout = xr.where(np.isnan(dampingout),0.,dampingout)
 #dampingout[np.isnan(dampingout)] = 0
 
+#%% Sanity Check for the damping...
+
+imon    = 1
+ilag    = 2
+plotvar = hff.isel(lag=ilag,month=imon) #dampingout.isel(month=imon)#
+plotmask = sigmask[imon,ilag]
+
+plotmask = xr.where(np.isnan(plotmask),0,1)
+
+bbsel   = [-80,0,50,65]
+#fig,ax,_=viz.init_regplot()
+
+fig,axs,_ = viz.init_orthomap(2,1,bboxplot=bbsel,figsize=(12,8))
+
+# Plot Before with significance dots
+ax = axs[0]
+ax = viz.add_coast_grid(ax,bbox=bbsel,proj=proj)
+pcm = ax.pcolormesh(plotvar.lon,plotvar.lat,plotvar,
+                    transform=proj,
+                    cmap='cmo.balance',vmin=-35,vmax=35)
+viz.plot_mask(plotvar.lon,plotvar.lat,plotmask.T,geoaxes=True,proj=proj,ax=ax,color='gray',markersize=0.2)
+ax.set_title('Before Mask (Lag %i, Month %s)' % (ilag+1,mons3[imon]))
+
+# PLot After Masking
+ax = axs[1]
+plotvar = dampingout.isel(month=imon)
+ax = viz.add_coast_grid(ax,bbox=bbsel,proj=proj)
+pcm = ax.pcolormesh(plotvar.lon,plotvar.lat,plotvar,
+                    transform=proj,
+                    cmap='cmo.balance',vmin=-35,vmax=35)
+viz.plot_mask(plotvar.lon,plotvar.lat,plotmask.T,geoaxes=True,proj=proj,ax=ax,color='gray',markersize=0.2)
+ax.set_title('After Mask')
+
+cb = viz.hcbar(pcm,ax=axs.flatten())
+
+figname = "%sHFF_Check_ERA5_%s_%s_mon%02i_lag%i.png" % (figpath,flxname,signame,imon+1,ilag+1)
+plt.savefig(figname,dpi=150,bbox_inches='tight')
+#plt.savefig()
+
 
 #%% Put into DataArray
-
 
 # Get Dimensions
 mons        = np.arange(1,13,1)
@@ -141,7 +199,8 @@ da          = xr.DataArray(dampingout,name='damping',
 
 edict = proc.make_encoding_dict(da)
 outpath_damping = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/03_reemergence/01_Data/proc/model_input/damping/"
-outname         = outpath_damping + "ERA5_%s_damping_pilot.nc" % flxname
+outname         = outpath_damping + "ERA5_%s_damping_%s.nc" % (flxname,signame)
+print("Saving to %s" % outname)
 da.to_netcdf(outname,encoding=edict)
 
 
@@ -180,8 +239,8 @@ ds_mld.to_netcdf(outname,encoding=edict)
 #%% Compute Kprev
 
 # Compute kprev for ens-mean mixed layer depth cycle
-infunc = lambda x: scm.find_kprev(x,debug=False,returnh=False)
-st     = time.time()
+infunc     = lambda x: scm.find_kprev(x,debug=False,returnh=False)
+st         = time.time()
 
 kprevall = xr.apply_ufunc(
     infunc, # Pass the function
@@ -191,7 +250,6 @@ kprevall = xr.apply_ufunc(
     vectorize=True, # True to loop over non-core dims
     )
 print("Completed kprev calc in %.2fs" % (time.time()-st))
-
 
 kprevall   = kprevall.transpose('mon','lat','lon').rename(dict(h='kprev'))
 edict      = proc.make_encoding_dict(kprevall)
