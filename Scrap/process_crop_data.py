@@ -116,7 +116,9 @@ timename        = 'time'
 dpath           = "/mnt/CMIP6/data/era5/reanalysis/single-levels/monthly-means/sea_surface_temperature/"
 ncsearch        = "%s*.nc" % dpath
 #outname         = outpath + "ERA5_%s_1979_2022_NATL.nc" % vname_out #Note this is the old naming convention, modified below to match HFF preprocessing
-outname         = outpath + "ERA5_sst_NAtl_1979to2021.nc"
+#outname         = outpath + #"ERA5_sst_NAtl_1979to2021.nc"
+outpath2    = "/stormtrack/data4/glliu/01_Data/Reanalysis/ERA5/"
+outname     = "sst_1979_2024.nc"
 
 # Get List of Files, open dataset
 nclist          = glob.glob(ncsearch)
@@ -141,6 +143,10 @@ outname    = outpath + "ERA5_sst_TropicalPacific_1979to2021.nc"
 dsall_trop.to_netcdf(outname,encoding=edict)
 
 
+# Also save global version
+outname_global  = outpath + "ERA5_sst_Global_1979to2024.nc"
+edict           = proc.make_encoding_dict(dsall180)
+dsall180.to_netcdf(outname_global,encoding=edict)
 # =============================================
 #%% Now do for OISST
 # =============================================
