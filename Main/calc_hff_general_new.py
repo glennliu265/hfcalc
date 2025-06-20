@@ -42,67 +42,57 @@ sys.path.append(amvpath)
 import amv.proc as hf
 
 
-# Path to base project 
+# Set Path and options
+#datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
+#datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/" 
+#datpath           = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/data/NATL_proc_obs/"
 datpath            = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/"
 
-# -------------
-#%% User Edits
-# -------------
+
+#%% Indicate Calculation Names
 
 
-overwrite         = True # Set to True to ovewrite
-debug             = True # Set to true for debugging plots
-
-# Indicate Time Crop (for input)
-croptime          = True
-tstart            =  '1979-01-01' #'1920-01-01'#'0200-01-01' # "2006-01-01" # 
-tend              =  '2024-12-31' #'2021-12-31'#'2005-12-31'#'2000-12-31' #"2101-01-01" # 
-timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
-
-# Select time crop (for the estimate)
-croptime_estimate = False # Cut time right before estimating the heat flux feedback
-tcrop_start       = '1979-01-01' #"1970-01-01"#'1920-01-01' '2070-01-01'#
-tcrop_end         = '2024-12-31' #'2021-12-31'#"1999-12-31"#'1970-01-01' '2099-12-31'#
-tcrop_fname       = ""
-if croptime_estimate:
-    tcrop_fname     = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
-
-# Indicate bbox crop information
-bbox_name           = "NAtl" # "Global"#
-
-# Variables and Dataset Name
-vnames_in           = ['sst','qnet']#['sst','thflx'] #['TS','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
-dataset_names       = ["ERA5","ERA5"]#['OISST',"ERA5_RegridOISST"] #'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
-# Note: Currently hard coded (unfortunately) to read the first dataset name as sst, second as flx
-#hflx_name           = "ERA" # set to None if dataset_name is same as hflx_name
-ensnum              = 1 #42
-lensflag            = False#True
-
-# These should be unnecessary after preproc_raw_inputs
+# OAFLUX Test Calculation (Qnet, 1948 to 2007, Global) ------------------------
+calcname            = "OAFLUX_1984_2007_Qnet_Global" 
 lonname             = 'lon'
 latname             = 'lat'
 tname               = 'time' 
 
-# For these datasets, loop for each ensemble member...
-lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
+# Indicate Input Time Crop (for input)
+croptime          =   True
+tstart            =  '1984-01-01'
+tend              =  '2007-12-31'
+timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
 
-#%%
-# Determine number of ensemble members
-dataset_name = dataset_names[0]
-if dataset_name == 'rcp85':
-    nens = 40
-elif dataset_name in ('gfdl_esm2m_lens', "csiro_mk36_lens"):
-    nens = 30
-elif dataset_name == 'canesm2_lens':
-    nens = 50
-elif dataset_name == 'htr': # CESM1 Historical
-    nens = 42
-elif "cesm1_htr" in dataset_name:
-    nens = 42
-else:
-    nens = 1
+# Indicate HFF calculation crop
+croptime_estimate = False # Cut time right before estimating the heat flux feedback
+tstart            =  '1984-01-01'
+tend              =  '2007-12-31'
+tcrop_fname       = ""
+if croptime_estimate:
+    tcrop_fname     = "_%sto%s" % (tstart[:4].replace('-',''),tend[:4].replace('-',''))
 
-#%% Options for each step
+# Indicate bbox crop information
+bbox_name           = "Global" # "NAtl
+
+# Variables Information  -----
+
+# SST 
+sstname   = "sst"
+sstnc     = "OAFLUX_sst_1984to2007.nc"
+sstpath   = "/Users/gliu/Globus_File_Transfer/Reanalysis/OAFLUX/"
+
+# Heat Flux
+flxname           = "qnet"
+flxnc             = "OAFLUX_qnet_1984to2007.nc"
+flxpath           = sstpath
+
+# Additional Information
+lensflag          = False#True
+nens              = 1 #42
+
+
+#%% Options for each calculation step
 
 # Step 1 (Preprocessing)
 detrend           = 1  # Detrend Method, 0 = gmsst, 1 = linear
@@ -116,6 +106,12 @@ monwin            = 3    # Window of months to consider
 # Step 3 (HFF Calculation)
 ensorem           = True # Set to False to skip ENSO removal step
 
+#%% Additional Toggles
+
+overwrite         = True # Set to True to ovewrite
+debug             = True # Set to true for debugging plots
+
+
 #%% Set up paths
 
 # Set Paths
@@ -124,6 +120,42 @@ ensopath = datpath + "enso/"
 hffpath  = datpath + "hff/"
 maskpath = datpath + "masks/"
 procpath = datpath + "proc/"
+
+hf.makedir(anompath)
+hf.makedir(ensopath)
+hf.makedir(hffpath)
+hf.makedir(maskpath)
+hf.makedir(procpath)
+
+# -------------------------------------------------------------------------
+#%% Part 1: Preprocess Variables (Anomalize, Detrend, Flip latitude if needed)
+# -------------------------------------------------------------------------
+
+
+vnames_in = [sstname,flxname]
+ncs_in    = [sstpath+sstnc,flxpath+flxnc]
+
+st_script = time.time()
+
+
+ds_all = [xr.open_dataset(ncs_in[vv])]
+
+
+
+
+def preprocess_ds(ds):
+    
+    
+    # Fix February Start
+    ds = hf.fixfebstart(ds)
+    
+    
+    
+
+
+
+
+
 
 #%%
 
@@ -511,5 +543,43 @@ if lensflag:
     
     
         
+
+
+
+#%% Delete the Following Probably (from old script)
+
+#vnames_in            = [sstname,flxname]
+
+# vnames_in           = ['sst','qnet']#['sst','thflx'] #['TS','LHFLX'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
+# ncs_in              = ['','']
+#dataset_names       = ["OAFLUX","OAFLUX"]#['OISST',"ERA5_RegridOISST"] #'cesm1_htr_5degbilinear'#'cesm2_pic'#'rcp85'
+
+# Note: Currently hard coded (unfortunately) to read the first dataset name as sst, second as flx
+#hflx_name           = "ERA" # set to None if dataset_name is same as hflx_name
+
+# # For these datasets, loop for each ensemble member...
+# lens_datasets     = ['htr','rcp85','gfdl_esm2m_lens','csiro_mk36_lens','canesm2_lens']
+
+
+# # Determine number of ensemble members
+# dataset_name = dataset_names[0]
+# if dataset_name == 'rcp85':
+#     nens = 40
+# elif dataset_name in ('gfdl_esm2m_lens', "csiro_mk36_lens"):
+#     nens = 30
+# elif dataset_name == 'canesm2_lens':
+#     nens = 50
+# elif dataset_name == 'htr': # CESM1 Historical
+#     nens = 42
+# elif "cesm1_htr" in dataset_name:
+#     nens = 42
+# else:
+#     nens = 1
+
+
+
+
+
+
 
 
