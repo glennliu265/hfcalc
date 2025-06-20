@@ -38,7 +38,7 @@ import glob
 import pandas as pd
 
 #%% Import modules
-stormtrack = 1
+stormtrack = 0
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -63,10 +63,10 @@ import amv.proc as hf # Update hf with actual hfutils script, most relevant func
 #%% ENSO Calculation and Cropping Options
 
 # Select time crop (prior to preprocessing)
-croptime          = True # Cut the time prior to detrending, EOF, etc
-tstart            =  '1979-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
-tend              =  '2024-12-31'#'2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
-timestr           = "%sto%s" % (tstart[:4],tend[:4])
+# croptime          = True # Cut the time prior to detrending, EOF, etc
+# tstart            = '1979-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
+# tend              = '2024-12-31'#'2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
+# timestr           = "%sto%s" % (tstart[:4],tend[:4])
 
 # ENSO Parameters
 pcrem             = 3                   # PCs to calculate
@@ -79,6 +79,10 @@ debug            = True # Debug toggle
 
 #%% Dataset option (load full TS variable in [time x lat x lon360])
 # Example provided below here is for CESM1
+
+
+# Output Path (Checks for an "enso" folder)
+outpath             = ""#"/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
 
 # Data Information
 # dataset_name        = 'cesm1_htr_5degbilinear'#"cesm2_pic"
@@ -124,15 +128,32 @@ detrend             = 1 # 1 to remove linear trend
 outpath             = ""
 yr_range            = "1979to2024" # Other topin is 1979to2021
 
+# OAFLUX (1deg, jetstream rip)
+dataset_name        = "OAFLUX"
+datpath             = "/Users/gliu/Globus_File_Transfer/Reanalysis/OAFLUX/"
+vname               = "sst"
+lonname             = "lon"
+latname             = "lat"
+timename            = "time"
+concat_dim          = None#"time"
+keepvars            = [timename,latname,lonname,vname]
+ensnum              = 1 # Irrelevant for now, need to add ensemble support...
+detrend             = 1 # 1 to remove linear trend 
+outpath             = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/enso/"
+#yr_range            = "1984to2007" # Other topin is 1979to2021
+croptime            = True # Cut the time prior to detrending, EOF, etc
+tstart              = '1984-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
+tend                = '2007-12-31'#'2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
+timestr             = "%sto%s" % (tstart[:4],tend[:4])
+yr_range            = timestr
+
 # Mask Information (first run a maskmaker script/section such as that in preproc_CESM2_PiControl.py)
 maskpath            = None
 maskname            = None
 
-# Output Path (Checks for an "enso" folder)
-outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
 
 
-#%%
+#%% Find File and Load Variable
 
 # 1A. Load Variable ----------
 
@@ -184,7 +205,6 @@ else:
     mask = xr.open_dataset(maskpath+maskname).mask.load()
     ds_all = ds_all * mask
     print("Mask applied in %.2fs" % (time.time()-st))
-
 
 # Set ensemble flag
 lensflag = False
@@ -271,9 +291,11 @@ st = time.time()
 #da = da.sel(lon=slice(bbox[0],bbox[1]),lat=slice(bbox[2],bbox[3]))
 
 # Check if ENSO has already been calculated and skip if so
-proc.makedir("%senso/"% datpath) 
-savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.nc" % (outpath,dataset_name,detrend,pcrem,timestr)
-
+if outpath is None:
+    proc.makedir("%senso/"% datpath) 
+    savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.nc" % (outpath,dataset_name,detrend,pcrem,timestr)
+else:
+    savename = "%s%s_ENSO_detrend%i_pcs%i_%s.nc" % (outpath,dataset_name,detrend,pcrem,timestr)
 # if lensflag:
 #     savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
 query = glob.glob(savename)
@@ -371,11 +393,11 @@ if (len(query) < 1) or (overwrite == True):
                  'times':times,
                  'enso_bbox':bbox}
                 )
-    print("Data saved in %.2fs"%(time.time()-st))
+    print("Data saved to %s in %.2fs"%(savename,time.time()-st))
 else:
     print("Skipping. Found existing file: %s" % (str(query)))
-# End Skip
 
+# End Skip
 #%% Plot the ENSO Index
 
 
