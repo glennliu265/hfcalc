@@ -267,7 +267,7 @@ print("Data preprocessed in %.2fs" % (time.time()-st))
 
 IN : ncfile, <dataset_name>_<vname>_manom_detrend#.nc
     Anomalized, detrended ts with landice masked applied
-
+    
 OUT : npz file <dataset_name>_ENSO_detrend#_pcs#.npz
     PC File containing:
         eofall (ENSO EOF Patterns)          [lon x lat x month x pc]
@@ -296,6 +296,7 @@ if outpath is None:
     savename = "%senso/%s_ENSO_detrend%i_pcs%i_%s.nc" % (outpath,dataset_name,detrend,pcrem,timestr)
 else:
     savename = "%s%s_ENSO_detrend%i_pcs%i_%s.nc" % (outpath,dataset_name,detrend,pcrem,timestr)
+
 # if lensflag:
 #     savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
 query = glob.glob(savename)
@@ -332,7 +333,7 @@ if (len(query) < 1) or (overwrite == True):
         # Portion Below is taken from calc_ENSO_PIC.py VV ***********
         eofall,pcall,varexpall = scm.calc_enso(invar,lon,lat,pcrem,bbox=bbox)
     
-    # Sanity Check
+    # Sanity Check ------------------------------------------------------------
     if debug:
         im = 0
         ip = 0
@@ -350,6 +351,7 @@ if (len(query) < 1) or (overwrite == True):
         cb.set_label("SST Anomaly ($\degree C \sigma_{ENSO}^{-1}$)")
         ax.set_title("EOF %i, Month %i\n Variance Explained: %.2f" % (ip+1,im+1,varexpall[im,ip]*100)+"%")
     
+    # Saving ------------------------------------------------------------------
     if save_netcdf:
         
         mons    = np.arange(1,13,1)
