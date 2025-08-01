@@ -61,7 +61,7 @@ if stormtrack:
     
     # Path to the processed dataset (qnet and ts fields, full, time x lat x lon)
     #datpath =  "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_RCP85/01_PREPROC/"
-    datpath =  "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/anom/"
+    datpath =  "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
     figpath =  "/home/glliu/02_Figures/01_WeeklyMeetings/20240621/"
     
 else:
@@ -81,16 +81,17 @@ proc.makedir(figpath)
 
 
 # Set Paths
-anompath = datpath + "/anom/"
-ensopath = datpath + "/enso/"
-hffpath  = datpath + "/hff/"
-maskpath = datpath + "/masks/"
+anompath = datpath + "anom/"
+ensopath = datpath + "enso/"
+hffpath  = datpath + "hff/"
+maskpath = datpath + "masks/"
+procpath = datpath + "proc/"
 
 # Part 1 (Preprocessing) ------------------------------------------
-overwrite         = False # Skip the file if it already exists
+overwrite         = True # Skip the file if it already exists
 
 # Select time crop (prior to preprocessing)
-croptime          = False # Cut the time prior to detrending, EOF, etc
+croptime          = True # Cut the time prior to detrending, EOF, etc
 tstart            =  '0200-01-01' # "2006-01-01" # 
 tend              =  '2000-12-31' #"2101-01-01" # 
 
@@ -172,6 +173,7 @@ for ensnum in np.arange(1,nens+1):
     ex: ncep_ncar_ts.nc  -->  ncep_ncar_ts_manom_detrend1.nc
     
     """
+    
     # Set lensflag
     lensflag = False
     if dataset_name in lens_datasets:
@@ -192,7 +194,7 @@ for ensnum in np.arange(1,nens+1):
                 da = xr.open_dataset("%s%s_%s_ens%02i.nc" % (datpath,dataset_name,v,ensnum))
         else:
             
-            da = xr.open_dataset(datpath+"%s_%s.nc" % (dataset_name,v))
+            da = xr.open_dataset(procpath+"%s_%s.nc" % (dataset_name,v))
         
         # Fix February Start
         da = proc.fix_febstart(da)
@@ -205,8 +207,13 @@ for ensnum in np.arange(1,nens+1):
         # Check time, and skip file if it already exists
         # ----------------------------------------------
         times   = da[tname].values
-        timesyr = times.astype('datetime64[Y]').astype(int) +1970
-        timestr = "%04ito%04i" % (timesyr[0],timesyr[-1])
+        timestr1 = "%04ito%04i" % (times[0].year,times[-1].year)
+        if timestr != timestr1:
+            print("Cropped to %s. Renaming based on new timestr." % (timestr1))
+            timestr = timestr1
+        # Old version, might need to check fi this approach still works with older files
+        #timesyr = times.astype('datetime64[Y]').astype(int) +1970
+        #timestr = "%04ito%04i" % (timesyr[0],timesyr[-1])
         
         # Set Save Name
         savename = "%s%s_%s_manom_detrend%i_%s.nc" % (anompath,dataset_name,v,detrend,timestr)
@@ -384,12 +391,12 @@ for ensnum in np.arange(1,nens+1):
     """
     allstart = time.time()
     
-    # Load ENSO
+    # Load ENSO Index
     savename = "%s%s_ENSO_detrend%i_pcs%i_%s.npz" % (ensopath,dataset_name,detrend,pcrem,timestr)
     if lensflag:
         savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=0)
-    ld = np.load(savename,allow_pickle=True)
-    ensoid = ld['pcs'] # [year x  month x pc]
+    ld      = np.load(savename,allow_pickle=True)
+    ensoid  = ld['pcs'] # [year x  month x pc]
     
     for v in vnames_in:
         
@@ -400,7 +407,7 @@ for ensnum in np.arange(1,nens+1):
         da = xr.open_dataset(savename)
         
         # Check if (ENSO index file) already exists, and skip if so.
-        savename = "%senso/%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (datpath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
+        savename = "%s%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i_%s.nc" % (anompath,dataset_name,v,detrend,ensolag,pcrem,monwin,timestr)
         if lensflag:
             savename = proc.addstrtoext(savename,"_ens%02i"%(ensnum),adjust=-1)
         query    = glob.glob(savename)
