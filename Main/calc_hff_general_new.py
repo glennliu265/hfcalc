@@ -37,22 +37,22 @@ import sys
 import scipy as sp
 
 # =============================================================================
-#%% CESM2 PiControl, SOM
+#%% CESM2 PiControl, FOM
 # =============================================================================
 
 device             = "stormtrack"
 datpath            = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/"
 
 # Dataset Info
-calcname            = "CESM2_SOM" 
+calcname            = "CESM2_FOM" 
 lonname             = 'lon'
 latname             = 'lat'
 tname               = 'time' 
 
 # Indicate Input Time Crop (for input)
 croptime          =   True
-tstart            =  '0060-01-01'
-tend              =  '0360-12-31'
+tstart            =  '0200-01-01'
+tend              =  '2000-12-31'
 timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
 
 # Indicate HFF calculation crop
@@ -70,18 +70,18 @@ bbox_name         = "NAtl" # "NAtl
 
 # SST 
 sstname           = "TS"
-sstnc             = "CESM2_SOM_TS_NAtl_0060to0360.nc"
+sstnc             = "CESM2_FOM_TS_NAtl_0200to2000.nc"
 sstpath           = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/proc/NAtl/"
 
 # Heat Flux
 flxname           = "SHF"
-flxnc             = "CESM2_SOM_SHF_NAtl_0060to0360.nc"
+flxnc             = "CESM2_FOM_SHF_NAtl_0200to2000.nc"
 flxpath           = sstpath
 varlnames         = "Net Heat Flux Damping"
 
 
 # Enso Information
-ensonc            = "CESM2_SOM_ENSO_detrend1_pcs3_0060to0360.nc"
+ensonc            = "CESM2_FOM_ENSO_detrend1_pcs3_0200to2000.nc"
 
 # Additional Information
 lensflag          = False#True

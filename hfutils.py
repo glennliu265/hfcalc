@@ -25,3 +25,5 @@ def addstrtoext(name,addstr,adjust=0):
     -4: 3 letter extension. -3: 2 letter extension
     """
     return name[:-(4+adjust)] + addstr + name[-(4+adjust):]
+
+
