@@ -64,6 +64,9 @@ nc_sst      = dpath + "ERA5_sst_NAtl_1979to2021.nc" #proc/"
 nc_thflx    = dpath + "ERA5_thflx_NAtl_1979to2021.nc"
 nc_enso     = dpath + "enso/ERA5_ENSO_detrend1_pcs3_1979to2021.nc"
 nc_mld      = dpath + "MIMOC_RegridERA5_mld_NAtl_Climatology.nc"
+flxname     = 'thflx'
+dof         = (2021-1979 + 1 - 2 - 1) * 3
+simname     = "THFLX_Pilot"
 
 #Qnet Version
 dpath       = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
@@ -71,17 +74,39 @@ nc_sst      = dpath + "ERA5_sst_NAtl_1979to2024.nc" #proc/"
 nc_thflx    = dpath + "ERA5_qnet_NAtl_1979to2024.nc"
 nc_enso     = dpath + "enso/ERA5_ENSO_detrend1_pcs3_1979to2024.nc"
 nc_mld      = dpath + "MIMOC_RegridERA5_mld_NAtl_Climatology.nc"
+flxname     = 'qnet'
+dof         = (2024-1979 + 1 - 2 - 1) * 3
+simname     = "SPGNE_Method1"
+
+
+
+# Select BBox
+bbox_yeager = [-50,-10,50,60] # Original
+bbox_spgne  = [-40,-15,52,62] # SPGNE
+bbsel  = bbox_spgne
+
+
+#%%
+
 
 # Open and Merge Datasets
 ds_sst      = xr.open_dataset(nc_sst).load()
+if 'expver' in ds_sst.variables:
+    ds_sst = ds_sst.drop('expver')
+    
+if 'number' in ds_sst.variables:
+    ds_sst = ds_sst.drop('number')
+    
 ds_thflx    = xr.open_dataset(nc_thflx).load()
+if np.all(ds_thflx.time.data != ds_sst.time.data):
+    ds_thflx['time'] = ds_sst['time']
+    
 ds_enso     = xr.open_dataset(nc_enso).load()
 ds_mld      = xr.open_dataset(nc_mld).load()
 ds_all      = xr.merge([ds_sst,ds_thflx,ds_enso,ds_mld])
 
-# Select BBox
-bbox_yeager = [-50,-10,50,60] # Original
-bbsel  = bbox_yeager
+
+
 
 #%%
 
@@ -96,16 +121,16 @@ dtmon       = 60*60*24
 #%% 1.A Preprocess
 
 # Deseason
-ds_vars = xr.merge([ds_regavg.sst,ds_regavg.thflx])
+ds_vars = xr.merge([ds_regavg.sst,ds_regavg[flxname]])
 dsa     = proc.xrdeseason(ds_vars)
 
 # Detrend
 order  = 3
 sst    = dsa.sst.data
-flx    = dsa.thflx.data
+flx    = dsa[flxname].data
 times  = np.arange(len(sst))
 invars = [sst,flx]
-outdt = [proc.polyfit_1d(times,iv,order) for iv in invars]
+outdt  = [proc.polyfit_1d(times,iv,order) for iv in invars]
 
 invars_detrended = [ii[2] for ii in outdt ] # 3rd argument
 
@@ -115,11 +140,15 @@ ax      = axs[0]
 ax.plot(times,sst,color="k",lw=.75,label="Raw")
 ax.plot(times,outdt[0][1],color="orange",lw=.75,label="%i-order fit"%order)
 ax.plot(times,outdt[0][2],color="blue",lw=.75,label="Detrended")
+ax.legend()
+ax.set_title("sst")
 
 ax      = axs[1]
 ax.plot(times,flx,color="k",lw=.75,label="Raw")
 ax.plot(times,outdt[1][1],color="orange",lw=.75,label="%i-order fit"%order)
 ax.plot(times,outdt[1][2],color="blue",lw=.75,label="Detrended",ls='dashed')
+ax.legend()
+ax.set_title(flxname)
 
 #%% 1.B Regress out ENSO (skip this step)
 
@@ -131,6 +160,28 @@ monwin  = 3
 enso_removed = [scm.remove_enso(vv[:,None,None],ensoid,ensolag,monwin) for vv in invars_detrended]
 invar_noenso = [enso_removed[ii][0] for ii in range(2)]
 
+#%% Visualize ENSO Removal
+
+debug = True
+if debug:
+    fig,axs = plt.subplots(2,1,constrained_layout=True,figsize=(12,4.5))
+    
+    # Plot SST
+    ax      = axs[0]
+    ax.plot(times,outdt[0][2],color="blue",lw=.75,label="Detrended")
+    ax.plot(times[24:-12],invar_noenso[0].squeeze(),color="red",lw=.75,label="Enso Removed")
+    ax.legend()
+    ax.set_title("sst")
+
+
+    # Plot Qnet
+    ax      = axs[1]
+    ax.plot(times,outdt[1][2],color="blue",lw=.75,label="Detrended")
+    ax.plot(times[24:-12],invar_noenso[1].squeeze(),color="red",lw=.75,label="Enso Removed")
+    ax.legend()
+    ax.set_title(qnet)
+
+    
 #%% 1.C Compute the HFF
 
 #damping,autocorr,crosscorr,autocov,cov = scm.calc_HF(sst,flx,[1,2,3],3,verbose=True,posatm=True,return_cov=True)
@@ -142,12 +193,29 @@ sst_noenso,flx_noenso = invar_noenso_rs
 hff_out               = scm.calc_HF(sst_noenso,flx_noenso,[1,2,3],3,verbose=True,posatm=True,
                                     return_cov=True,return_dict=True)
 
-dt                    = 60*60*24
-damping               = hff_out['damping'] / dt * -1
+#dtday                    = 60*60*24
+damping               = hff_out['damping'] * -1#hff_out['damping'] / dt * -1
 
 
 lbd_a = damping[:,0,:,:].squeeze() # Just Take Lag 1
 
+#%% Visualize components of the damping estimate
+ilag = 0
+mons3 = proc.get_monstr()
+
+fig,axs = viz.init_monplot(1,3,figsize=(12,4))
+
+ax = axs[0]
+ax.plot(mons3,hff_out['covall'][:,ilag,...].squeeze())
+ax.set_title("Lag Covariance")
+
+ax = axs[1]
+ax.plot(mons3,hff_out['autocovall'][:,ilag,...].squeeze())
+ax.set_title("Autocovariance")
+
+ax = axs[2]
+ax.plot(mons3,hff_out['damping'][:,ilag,...].squeeze()*-1)
+ax.set_title("Damping")
 
 # ------------ <0> ------------
 #%% Check the Significance
@@ -158,7 +226,7 @@ rsst    = hff_out['autocorr']
 rflx    = hff_out['crosscorr']
 p       = 0.05
 tails   = 2
-dof     = (2021-1979 + 1 - 2 - 1) * 3
+
 method  = 4
 
 # Compute and Apply Mask
@@ -179,7 +247,6 @@ _,_,ccmask = scm.prep_HF(hff, rsst, rflx,
 print("Completed significance testing in %.2fs" % (time.time()-st))
 #%%
 
-mons3    = proc.get_monstr()
 
 fsz_axis = 14
 fig,axs  = viz.init_monplot(3,3,constrained_layout=True,figsize=(14,6.5))
@@ -230,20 +297,31 @@ for ii in range(3):
         
         ax.plot(mons3,plotvar)
         ax.plot(mons3,plotvar*plotmsk,marker="o",ls='none',markersize=10)
-        
+
 
 # =================================
 #%% 2. Compute Fprime
 # =================================
 # Get Flx and SST
-flx = invars_detrended[1]/dt * -1 # Time
+#dtday = 3600*24
+
+nyrs_new = int(len(invars_detrended[1])/12)
+dttile   = proc.get_dtmon(nyrs=nyrs_new)
+dtmon    = proc.get_dtmon()
+
+flx = invars_detrended[1] * -1#/dttile * -1 # Time
 sst = invars_detrended[0] # 
 mld = ds_regavg.mld
 
-# Tile Damping
-#lbd_a_conv = lbd_a * mld 
-lbd_a_tile = np.tile(lbd_a,int(len(flx)/12)) #* -1
 
+
+
+# Tile Damping
+rho        = 1026
+cp0        = 3996
+lbd_a_conv = lbd_a / (rho * cp0 *mld) * dtmon
+#lbd_a_tile = np.tile(lbd_a_conv,nyrs_new) #* -1
+lbd_a_tile = np.tile(lbd_a,nyrs_new)
 # Compute Fprime
 
 """
@@ -283,10 +361,14 @@ outspec = scm.quick_spectrum(input_spec,nsmooth,0.10,dt=dtmon,
                              return_dict=True)
 
 vnames = ["SST","FLX","Fprime"]
-fig,ax = plt.subplots(1,1,figsize=(12,3.5))
+fig,axs = plt.subplots(2,1,figsize=(12,3.5))
 
 for ii in range(3):
     
+    if ii == 0:
+        ax = axs[0]
+    else:
+        ax = axs[1]
     
     plotfreq = outspec['freqs'][ii] * dtmon
     plotspec = outspec['specs'][ii] / dtmon
@@ -296,8 +378,7 @@ for ii in range(3):
 ax.legend()
 
 
-# =================================
-#%% Store stochastic model parameters
+# =================================#%% Store stochastic model parameters
 # =================================
 
 coordsmon = {'mon':np.arange(1,13)}
@@ -326,7 +407,13 @@ def convert_inputs_simple(ds_inputs,rho=1026,cp=3850):
     return ds_inputs
 
 
-ds_inputs_conv = convert_inputs_simple(ds_inputs)
+ds_inputs_conv  = convert_inputs_simple(ds_inputs)
+# Save output conversion
+edict           = proc.make_encoding_dict(ds_inputs_conv)
+outpath_spg     = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/sm_point_run/"
+outname_inputs  = "%s%s_inputs.nc" % (outpath_spg,simname)
+ds_inputs_conv.to_netcdf(outname_inputs,encoding=edict)
+
 
 # =================================
 #%% Run the entraining stochastic model
@@ -360,27 +447,26 @@ times_sim   = xr.cftime_range(start='0000',periods=int(nyr_sim*12),freq="MS",cal
 dims        = {'ens':np.arange(1,nsim+1,1) ,'time':times_sim}
 da_sim_out  = xr.DataArray(out_ssts,dims=dims,coords=dims,name='sst')
 edict       = proc.make_encoding_dict(da_sim_out)
-outpath_spg = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/spg_data/"
-outname     = outpath_spg + "stochastic_model_point.nc"
+outpath_spg = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/sm_point_run/"
+#outpath_spg = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/spg_data/"
+outname     = "%s%s_output.nc" % (outpath_spg,simname)
 da_sim_out.to_netcdf(outname,encoding=edict)
 
-
-zd
 #%% Lets compare the SSTs by looking at a few Metrics
 # ------------ <0> ------------
 #proc.
 
 sst = out_ssts[0,:]
-in_ssts = [sst,proc.deseason(sst_sim)]
+in_ssts = [sst,]#proc.deseason(sst_sim)]
 
 expmarkers      = ['d',"o"]
 expcolors       = ['k','goldenrod']
 #expcolors_sig   = ['gray','']
-expnames    = ['ERA5 SST','Stochastic Model']
+expnames        = ['ERA5 SST','Stochastic Model']
 
 # Compute the ACF
-nsmooth     = [10,500]
-metrics_out = scm.compute_sm_metrics(in_ssts,nsmooth=nsmooth)
+nsmooth         = [10,500]
+metrics_out     = scm.compute_sm_metrics(in_ssts,nsmooth=nsmooth)
 
 # ------------ <0> ------------    
 #%% Plot the ACF
