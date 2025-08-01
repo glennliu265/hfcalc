@@ -371,7 +371,6 @@ cints = np.arange(-20,21,1)
 fig,axs = plt.subplots(2,2,figsize=(16,6.5),facecolor='white',constrained_layout=True,
                        subplot_kw={'projection':proj})
 
-
 for s in range(4):
     
     ax = axs.flatten()[s]
@@ -397,4 +396,6 @@ fig.colorbar(pcm,ax=axs.flatten(),orientation='horizontal',fraction=0.045,pad=0.
 plt.suptitle("Seasonally-Averaged Net Heat Flux Feedback Differences(Lag %i, $Wm^{-2}K^{-1}$) \n RCP85 - HTR" % (il+1),y=1.10,fontsize=16)
 plt.savefig("%sNHFLX_Damping_DIFFERENCES_SAVG_lag%i.png" % (figpath,il+1),
             dpi=200,bbox_inches='tight',transparent=False)
+
+#%%
     
