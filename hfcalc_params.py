@@ -14,10 +14,7 @@ Created on Thu Feb  1 13:44:49 2024
 import numpy as np
 import cartopy.crs as ccrs
 
-
 #%% Cropping Information
-
-
 
 # Plotting Information ( Copied from predict_amv_params)
 proj          = ccrs.PlateCarree()
@@ -29,11 +26,14 @@ bbox_crop     = [-90,20,0,90]  # Preprocessing box
 #%% Degrees of Freedom  for a Simulation (assuming independent data)
 
 dofs_cesm = {
-    "PIC_FULL_paper": 1898-1-2-2   ,# PiControl 400-2200, # 1 for Enso Lag, 2 for month window shift? , Should this be 1801?
-    "PIC_SLAB_paper": 898-1-2-2    ,##, PiControl 100-1100, Should this be 901?
-    "PIC_FULL"      : (1801-1-2)*3 ,# Adjusted to include month window?
-    "PIC_SLAB"      : (901-1-2)*3  ,# Adjusted
-    "HTR_FULL"      : (86-1-2)*3   ,# Historical 1920-2005
+    
+    "PIC_FULL_paper"        : 1898-1-2-2   ,# PiControl 400-2200, # 1 for Enso Lag, 2 for month window shift? , Should this be 1801?
+    "PIC_SLAB_paper"        : 898-1-2-2    ,##, PiControl 100-1100, Should this be 901?
+    "PIC_FULL"              : (1801-1-2)*3 ,# Adjusted to include month window?
+    "PIC_SLAB"              : (901-1-2)*3  ,# Adjusted
+    "HTR_FULL"              : (86-1-2)*3   ,# Historical 1920-2005
+    "OISST_ERA5_82to20"     : (2020-1982+1-1-2)*3, # 1982 to 2020, +1 for inclusive
+    
     }
 
 #%% HFF Significance Testing / Preprocessing Names
@@ -104,7 +104,6 @@ hparam5 = {
     'method'  : 1       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
     }
 
-
 hname6 = "cesm1le5degLHFLXDamp" # cesm
 hparam6 = {
     'ensorem' : 1,      # 1=enso removed, 0=not removed
@@ -118,9 +117,27 @@ hparam6 = {
     'method'  : 1       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
     }
 
+
+hname7 = "OisstEra82to20THFLXDamp" # OISST and ERA5. 1982-2020
+hparam7 = {
+    'ensorem' : 1,      # 1=enso removed, 0=not removed
+    'ensolag' : 1,      # Lag Applied toENSO and Variable before removal
+    'monwin'  : 3,      # Size of month window for HFF calculations
+    'detrend' : 1,      # Whether or not variable was detrended
+    'tails'   : 2,      # tails for t-test
+    
+    'p'       : 0.05,   # p-value for significance testing
+    'sellags' : [0,],   # Lags included (indices, so 0=lag1)
+    'lagstr'  : "lag1", # Name of lag based on sellags
+    'method'  : 4       # Significance test option: 1 (No Mask); 2 (SST autocorr); 3 (SST-FLX crosscorr); 4 (Both), 5 (Replace with SLAB values)
+    }
+
+
+# Note, need to add ERA5 only one
+
 # Combine and make the dictionaries
-hff_names = [hname1,hname2,hname3,hname4,hname5,hname6]
-hff_dicts = [hparam1,hparam2,hparam3,hparam4,hparam5,hparam6]
+hff_names = [hname1,hname2,hname3,hname4,hname5,hname6,hname7]
+hff_dicts = [hparam1,hparam2,hparam3,hparam4,hparam5,hparam6,hparam7]
 hff_sets  = dict(zip(hff_names,hff_dicts))
 
 #%%

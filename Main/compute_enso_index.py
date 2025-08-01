@@ -38,7 +38,7 @@ import glob
 import pandas as pd
 
 #%% Import modules
-stormtrack = 0
+stormtrack = 1
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -147,6 +147,63 @@ tend                = '2007-12-31'#'2021-12-31' #'2005-12-31'#'2000-02-01' # "21
 timestr             = "%sto%s" % (tstart[:4],tend[:4])
 yr_range            = timestr
 
+# CESM2 PiControl FOM
+dataset_name        = "CESM2_FOM"
+datpath             = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/TS/"
+vname               = "TS"
+lonname             = "lon"
+latname             = "lat"
+timename            = "time"
+concat_dim          = "time"
+keepvars            = [timename,latname,lonname,vname]
+ensnum              = 1 # Irrelevant for now, need to add ensemble support...
+detrend             = 1 # 1 to remove linear trend 
+outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/enso/"
+#yr_range            = "1984to2007" # Other topin is 1979to2021
+croptime            = True # Cut the time prior to detrending, EOF, etc
+tstart              = '0200-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
+tend                = '2000-12-31'#'2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
+timestr             = "%sto%s" % (tstart[:4],tend[:4])
+yr_range            = timestr
+
+# # CESM2 PiControl FOM
+# dataset_name        = "CESM2_SOM"
+# datpath             = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/SOM/"
+# vname               = "TS"
+# lonname             = "lon"
+# latname             = "lat"
+# timename            = "time"
+# concat_dim          = "time"
+# keepvars            = [timename,latname,lonname,vname]
+# ensnum              = 1 # Irrelevant for now, need to add ensemble support...
+# detrend             = 1 # 1 to remove linear trend 
+# outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/enso/"
+# #yr_range            = "1984to2007" # Other topin is 1979to2021
+# croptime            = True # Cut the time prior to detrending, EOF, etc
+# tstart              = '0060-01-01' #'1920-01-01'#'0001-01-01' # "2006-01-01" # 
+# tend                = '0360-12-31'#'2021-12-31' #'2005-12-31'#'2000-02-01' # "2101-01-01" # 
+# timestr             = "%sto%s" % (tstart[:4],tend[:4])
+# yr_range            = timestr
+
+# CESM2 PiControl MCOM
+dataset_name        = "CESM2_MCOM"
+datpath             = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/POM/"
+vname               = "TS"
+lonname             = "lon"
+latname             = "lat"
+timename            = "time"
+concat_dim          = "time"
+keepvars            = [timename,latname,lonname,vname]
+ensnum              = 1 # Irrelevant for now, need to add ensemble support...
+detrend             = 1 # 1 to remove linear trend 
+outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/enso/"
+#yr_range            = "1984to2007" # Other topin is 1979to2021
+croptime            = True # Cut the time prior to detrending, EOF, etc
+tstart              = '0100-01-01' 
+tend                = '0500-12-31'
+timestr             = "%sto%s" % (tstart[:4],tend[:4])
+yr_range            = timestr
+
 # Mask Information (first run a maskmaker script/section such as that in preproc_CESM2_PiControl.py)
 maskpath            = None
 maskname            = None
@@ -162,6 +219,13 @@ if dataset_name == "cesm2_pic":
     searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
 elif dataset_name == "OISST": # Just grab tropical pacific
     searchstr = "%s%s*%s*TropicalPacific.nc" % (datpath,dataset_name,vname) # Searches for datpath + *LANDFRAC*.nc
+elif dataset_name == "CESM2_FOM":
+    searchstr = datpath + "b.e21.B1850.f09_g17.CMIP6-piControl.001.cam.h0.TS.*.nc" 
+elif dataset_name == "CESM2_SOM":
+    searchstr = datpath + "e.e21.E1850.f09_g17.CMIP6-piControl.001_branch2.cam.h0.TS.*.nc"
+    
+elif dataset_name == "CESM2_MCOM":
+    searchstr = datpath + "b.e21.B1850.f09_g17.1dpop2-gterm.005.*.TS.nc"
 elif dataset_name == "ERA5": # Tropical Pacific Box
     if yr_range is None:
         yr_range = "1979to2021"
@@ -222,9 +286,10 @@ From this point on you should have:
 
 """
 
-# Select the Box and load
+# Select the Box and time period  load
 st    = time.time()
 dsreg = ds_all.sel(lon=slice(bbox[0],bbox[1]),lat=slice(bbox[2],bbox[3]))
+dsreg = dsreg.sel(time=slice(tstart,tend))
 dsreg = dsreg.load()
 print("Output Loaded in %.2fs" % (time.time()-st))
 

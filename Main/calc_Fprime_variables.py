@@ -109,6 +109,7 @@ datname      = "cesm1le_htr_5degbilinear"
 lensflag     = True # Set to True for lens datasets/to detrend with ensemble average
 outvar       = "Eprime"  # "Set to Fprime by default, but LHFLX for Eprime calculations..."
 outpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
+regstr       = "Global"
 
 # Mixed Layer Depth --> [h: time x lat x lon180]
 mldpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/mld/"
@@ -136,6 +137,7 @@ dampstr      = "cesm1le5degLHFLX"
 nroll        = 0 # Amount to roll lbd*T' term
 rollstr      = "nroll%0i"  % nroll
 convert_wm2  = False # Convert hff to wm2
+
 
 # Conversion Factors
 dt          = 3600*24*30

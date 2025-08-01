@@ -91,7 +91,7 @@ stormtrack   = 1
 # Indicate inputs
 datname      = "cesm1le_htr_5degbilinear"
 lensflag     = True # Set to True for lens datasets/to detrend with ensemble average
-outvar       = "Eprime"  # "Set to Fprime by default, but LHFLX for Eprime calculations..."
+outvar       = "Fprime"  # "Set to Fprime by default, but LHFLX for Eprime calculations..."
 outpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
 regstr       = "Global"
 
@@ -102,8 +102,8 @@ mldname      = "h"
 
 # Net Heat Flux (Positive Upwards) --> [qnet: time x lat x lon180]
 flxpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
-flxnc        = "cesm1_htr_5degbilinear_LHFLX_Global_1920to2005.nc"
-flxname      = 'LHFLX'
+flxnc        = "cesm1_htr_5degbilinear_qnet_Global_1920to2005.nc"
+flxname      = 'qnet'
 
 # SST
 sstpath      = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
@@ -111,16 +111,17 @@ sstnc        = "cesm1_htr_5degbilinear_TS_Global_1920to2005.nc"
 sstname      = 'TS'
 
 # Damping 
-damppath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/LHFLX_damping/"
+damppath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/qnet_damping/"
 dampnc       = "cesm1_htr_5degbilinear_hfdamping_Global_1920to2005_ensorem1_detrend1.nc"
-dampname     = 'LHFLX_damping'
+dampname     = 'qnet_damping'
 ilag         = 0 # Indicate which lag to select
 
 # Damping Information and roll options
-dampstr      = "cesm1le5degLHFLX"
+dampstr      = "cesm1le5degqnet"
 nroll        = 0 # Amount to roll lbd*T' term
 rollstr      = "nroll%0i"  % nroll
 convert_wm2  = False # Convert hff to wm2
+
 
 
 # Conversion Factors
@@ -161,6 +162,7 @@ print("Loaded Flux and SST in %.2fs" % (time.time()-st))
 
 # Preprocess 
 ds_load = [ds_sst,ds_flx]
+ds_load = [hf.fix_febstart(ds) for ds in ds_load]
 # if ds_sst.shape != ds_flx.shape:
 #     print("Resizing variables")
 #     ds_load = hf.resize_ds(ds_load) # (make sure they are the same size)
@@ -195,7 +197,6 @@ if lensflag:
 
 # Load mixed layer depth for conversion from [calc_hclim.py] # [mon x lat x lon]
 ds_mld                  = xr.open_dataset(mldpath + mldnc)[mldname]
-
 
 dshff,ds_mld            = [format_ds_mon(ds) for ds in [dshff,ds_mld]]
 
