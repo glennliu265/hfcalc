@@ -272,11 +272,12 @@ if pred_prep: # Just prep the surface temperature
     apply_limask =False
     print("Saving for predict_amv in %s" % predpath)
 else:
+    
     if use_SST:
         vnames    = ("FSNS","FLNS","LHFLX","SHFLX",)#"FSNS","FLNS","LHFLX","SHFLX")# ("TS","FSNS","FLNS","LHFLX","SHFLX")
     else:
         vnames    = ("TS","FSNS","FLNS","LHFLX","SHFLX")
-    calc_qnet = False # Set to True to compute Qnet
+    calc_qnet = True # Set to True to compute Qnet
     apply_limask=True
     savepath  = outpath
 nvar      = len(vnames)
@@ -373,6 +374,52 @@ for e in tqdm(range(nens)):
         da.to_netcdf(savename,
                  encoding={'qnet': {'zlib': True}})
 
+
+#%% If you were stupid and forgot to set calc_qnet to True (dumbass me)
+
+
+# import glob
+
+
+# calc_qnet=True # Set it True because you forgot... stupid hack fix to erase later. so tired.
+
+# for e in tqdm(range(nens)):
+#     for v,vname in enumerate(vnames):
+#         dp = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/'
+#         fn = '%sCESM1_htr_%s_ens%02i.nc' % (dp,vname,e+1)
+#         ds_msk = xr.open_dataset(fn).load() # Signs have already been flipped...
+        
+#         # Preallocate for first ensemble member!!
+#         if e == 0:
+#             nlat,nlon = len(ds_msk.lat),len(ds_msk.lon)
+#             ensavgq = np.zeros((1,ntime,nlat,nlon)) # [Var x Time x Lat x Lon]
+#             if calc_qnet:
+#                 qnet   = np.zeros((ntime,nlat,nlon)) 
+        
+#         qnet += ds_msk.values
+    
+#     coords  = {'time':ds_msk.time,'lat':ds_msk.lat,'lon':ds_msk.lon}
+    
+#     # Make/save qnet
+#     ensavgq[0,:,:,:] += qnet.copy()
+    
+#     da = xr.DataArray(qnet,
+#                 dims=coords,
+#                 coords=coords,
+#                 name = 'qnet',
+#                 )
+#     if pred_prep:
+#         if apply_limask:
+#             savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i.nc" % (savepath,mconfig,"qnet",regrid,e+1)
+#         else:
+#             savename = "%sCESM1_%s_%s_regrid%ideg_ens%02i_nomask.nc" % (savepath,mconfig,"qnet",regrid,e+1)
+#     else: # Always apply mask for HFF calculations
+#         savename = "%sCESM1_%s_%s_ens%02i.nc" % (savepath,mconfig,"qnet",e+1)
+#     da.to_netcdf(savename,
+#              encoding={'qnet': {'zlib': True}})
+
+
+
 #%% Need to process SST, if it is available
 
 if use_SST:
@@ -403,8 +450,34 @@ if use_SST:
         
         ds_sst_all.append(da_new)
 
+    # Save the ensemble mean
+    ds_concat = xr.concat(ds_sst_all,dim='ens')
+    
+    # Compute the ensemble mean
+    ds_ts_ensavg = ds_concat.mean('ens')
+    savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,'ts')
+    ds_ts_ensavg.to_netcdf(savename,encoding={'ts':{'zlib':True}})
     
 
+#%% Save the Ensemble average of each variable
+
+qnet_ensavg = ensavg[-1,:,:,:]/nens
+coords      = dict(time=ds_msk.time,lat=ds_msk.lat,lon=ds_msk.lon)
+da_ensavg_qnet = xr.DataArray(qnet_ensavg,coords=coords,dims=coords,name="qnet")
+savename = "%sCESM1_%s_%s_ensAVG.nc" % (savepath,mconfig,'qnet')
+edict    = {'qnet':{'zlib':True}}
+da_ensavg_qnet.to_netcdf(savename,encoding=edict)
+
+#%%
+
+
+vnames_ensavg = ['FSNS', 'FLNS', 'LHFLX', 'SHFLX',"qnet"]
+
+    
+for v in range(len(vnames_ensavg)):
+    vnames_save = vnames_ensavg[v]
+    eavg_out = ensavg[v,...]
+    coords=dict(())
 
 #%%
 
@@ -419,7 +492,7 @@ for v in range(len(vnames)):
         vnames_save = "ts"
     else:
         vnames_save = vnames[v]
-        
+    
     v_ensavg = ensavg[v,:,:,:]/nens
     
     da = xr.DataArray(v_ensavg,
@@ -427,7 +500,6 @@ for v in range(len(vnames)):
                 coords=coords,
                 name = vnames_save,
                 )
-
     
     if pred_prep:
         if apply_limask:
@@ -440,3 +512,11 @@ for v in range(len(vnames)):
     da.to_netcdf(savename,
              encoding={vnames_save: {'zlib': True}})
 
+#%% Do more repairs...
+pth    = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR'
+nclist = ["CESM1_htr_qnet_ens%02i.nc" % i for i in range(1,43,1)]
+ds_all = [xr.open_dataset(nc) for nc in nclist]
+
+dsmerge = xr.concat(ds_all,dim='ens')
+
+CESM1_htr_qnet_ens01.nc

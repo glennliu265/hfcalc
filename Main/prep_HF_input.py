@@ -49,26 +49,55 @@ import hfcalc_params as hp
 # Region Crop
 
 bbox_crop = [-90,20,0,90]  # Preprocessing box
-dof       = 83#hp.dofs_cesm['HTR_FULL'] #None # DOF to use, can manually set
-print("Using %i dofs" % (dof))
+#dof       = #None#83#hp.dofs_cesm['HTR_FULL'] #None # DOF to use, can manually set
+
 
 # Parameter Set
 print("Parameter Sets: " + str(hp.hff_names))
-setname = "nomasklag1"
+setname = 'cesm1le5degLHFLXDamp'#"nomasklag1"
 setdict = hp.hff_sets[setname]
 
-
-# Save a no-test version
-
-# Input (nc file with LHFLX damping, crosscorr, and autocorr with [ens x mon x lag x lat x lon360])
-ncname = "CESM1_htr_LHFLX_damping_ensorem1_detrend1_1920to2005_allens.nc"
-ncpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/LHFLX_damping/"
-vname  = "LHFLX_damping"
-
-# Output Path
+# Output Paths
 datpath = ""
-outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/"#"#model_input/damping/" # Note this was giving me permission erorrs
+outpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/03_reemergence/proc/model_input/damping/" # Note this was giving me permission erorrs
 
+# Save a no-test version -----
+
+# Input (nc file with LHFLX damping, crosscorr, and autocorr with [ens x mon x lag x lat x lon360]) -----
+# ncname = "CESM1_htr_LHFLX_damping_ensorem1_detrend1_1920to2005_allens.nc"
+# ncpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/LHFLX_damping/"
+# vname  = "LHFLX_damping"
+
+# Try for Qnet (CESM1) -----
+# vname  = "qnet_damping"
+# ncname = "CESM1_htr_%s_ensorem1_detrend1_1920to2005_allens.nc" % vname
+# ncpath = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/hfdamping_HTR/%s/" % vname
+# dof    = hp.dofs_cesm['HTR_FULL']
+# savename = "%sCESM1_HTR_FULL_%s_%s.nc" % (outpath,vname,setname)
+# lensflag = True
+
+# Qnet Damping (CESM2-PiC) -----
+# vname    = "qnet_damping"
+# ncpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/qnet_damping/"
+# ncname   = "cesm2_pic_hfdamping_NAtl_0200to2000_ensorem1_detrend1.nc"
+# dof      = hp.dofs_cesm['PIC_FULL'] #1800
+# lensflag = False
+# savename = "%scesm2_pic_%s_%s.nc" % (outpath,vname,setname)
+
+
+# Qnet Damping (CESM1-LE 5 Deg)
+vname    = "LHFLX_damping"
+ncpath   = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/hff/%s/" % vname
+ncname   = "cesm1_htr_5degbilinear_hfdamping_Global_1920to2005_ensorem1_detrend1.nc"
+dof      = hp.dofs_cesm['HTR_FULL']
+lensflag = True
+savename = "%scesm1_htr_5degbilinear_%s_%s.nc" % (outpath,vname,setname)
+
+
+
+print("Processing: %s" % ncname)
+print("\tUsing %s dofs" % (str(dof)))
+print("\tOutput will be saved as %s" % savename)
 
 #%% Load HFF
 
@@ -122,28 +151,38 @@ print("Completed significance testing in %.2fs" % (time.time()-st))
 
 
 # Take Lag
-dampinglag = dampingmasked[:,:,setdict['sellags'],:,:].squeeze() # [Ens x Month x Lat x Lon]
+if len(dampingmasked.shape) == 5 or lensflag: # [ens x mon x lag x lat x lon]
+    dampinglag = dampingmasked[:,:,setdict['sellags'],:,:].squeeze() # [Ens x Month x Lat x Lon]
+    dampingout = dampinglag.transpose(1,0,2,3) # Transpose to [Month x Ens x Lat x Lon]
+    lensflag   = True
+else: # [mon x lag x lat x lon]
+    dampinglag = dampingmasked[:,setdict['sellags'],:,:].squeeze() # [Month x Lat x Lon]
+    dampingout = dampinglag#dampinglag.transpose(1,0,2,3) # Transpose to [Month x Ens x Lat x Lon]
 
-# Transpose to [Month x Ens x Lat x Lon]
-dampingout = dampinglag.transpose(1,0,2,3)
+
 #%% Transpose to [Month x Ens x Lat x Lon] and prepare to save
 
 # Save output
-cdict    = {'mon':np.arange(1,13,1),
-              'ens':np.arange(1,43,1),
-              'lat':ds_reg.lat.values,
-              'lon':ds_reg.lon.values}
+if lensflag:
+    cdict    = {'mon':np.arange(1,13,1),
+                  'ens':np.arange(1,43,1),
+                  'lat':ds_reg.lat.values,
+                  'lon':ds_reg.lon.values}
+else:
+    cdict    = {'mon':np.arange(1,13,1),
+                  'lat':ds_reg.lat.values,
+                  'lon':ds_reg.lon.values}
 daout    = xr.DataArray(dampingout,coords=cdict,dims=cdict,name='damping')
 edict    = {"damping":{"zlib":True}}
-
-savename = "%sCESM1_HTR_FULL_%s_%s.nc" % (outpath,vname,setname)
 daout.to_netcdf(savename,encoding=edict)
+print("Saved output to %s" % savename)
 
 # Save EnsAvg Version
-daout_eanvg = daout.mean('ens')
-savename = "%sCESM1_HTR_FULL_%s_%s_EnsAvg.nc" % (outpath,vname,setname)
-daout_eanvg.to_netcdf(savename,encoding=edict)
-
+if lensflag:
+    daout_eanvg = daout.mean('ens')
+    savename_ensavg = proc.addstrtoext(savename,"_EnsAvg",adjust=-1)
+    daout_eanvg.to_netcdf(savename_ensavg,encoding=edict)
+    print("Saved Ens Avg output to %s" % savename_ensavg)
 
 #%% Assumes timeseries have no correlation (can eventually implement effective dof)
 

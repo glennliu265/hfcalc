@@ -25,6 +25,7 @@ To get started, mount the WHOI CMIP5 server by using
 General steps
 - Combine upwelling/downwelling radiation terms
 - Calculate Net Heat Flux, downward positive
+- Fix February Start
 - Apply Land/Ice Mask to everything
 - Save output with variable names
 

@@ -95,7 +95,7 @@ if datname == "cesm2_pic":
         
         # Create filename/list and load
         vname     = vnames[vv]
-        keepvars  = ["time","lat","lon",vname]
+        keepvars  = ["time","lat","lon", vname]
         searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
         nclist    = glob.glob(searchstr)
         nclist.sort()

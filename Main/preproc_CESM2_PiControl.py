@@ -28,7 +28,6 @@ Created on Mon Jun 17 09:21:27 2024
 @author: gliu
 """
 
-
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -43,20 +42,28 @@ import scipy as sp
 
 #%% User Edits
 
-datname     = "cesm2_pic"
+datname       = "cesm2_pic"
+datpath       = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/" # Path to regridded mixed-layer depth
+#bbox_reg      = [-80,0,0,65]
+#bbox_reg      = [-100,20,-10,90] # Larger Region 
 
 # Indicate Data PAth
-datpath     = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/"
-mask_sep    = True
-outpath     = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/"
-
+datpath       = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/"
+mask_sep      = True
+outpath       = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/"
 
 # Part 1 (Land/Ice Mask Creation)
-vnames      = ("LANDFRAC","ICEFRAC") # Variables
-mthres      = (0.30,0.05) # Mask out if grid ever exceeds this value
-maskname    = "land%03i_ice%03i" % (mthres[0]*100,mthres[1]*100)
+vnames        = ("LANDFRAC","ICEFRAC") # Variables
+mthres        = (0.30,0.05) # Mask out if grid ever exceeds this value
+maskname      = "land%03i_ice%03i" % (mthres[0]*100,mthres[1]*100)
 
-mnum        = 1 # Just 1 Ensemble Member for PiControl
+# Make Ice Fraction over specific time
+croptime          = True
+tstart            =  '0200-01-01' # "2006-01-01" # 
+tend              =  '2000-02-01' # "2101-01-01" # 
+timestr           =  '%04ito%04i'  % (int(tstart[:4]),int(tend[:4]))# "
+
+mnum          = 1 # Just 1 Ensemble Member for PiControl
 
 
 # Part 2 (Anomalize + Mask)
@@ -80,6 +87,30 @@ sys.path.append(scmpath)
 #import amv.loaders as dl
 
 from amv import proc as hf
+
+
+
+#%%
+
+
+
+
+def load_cesm2_pic(vname,datpath,searchstr=None):
+    # Function to Load CESM2 PiC Output on stormtrack, Searches for 
+    # File is assumed to be at <datpath>/<vname>/*<vname>*.nc
+    keepvars  = ["time","lat","lon",vname]
+    if searchstr is None:
+        searchstr = "%s%s/*%s*.nc" % (datpath,vname,vname) # Searches for datpath + *LANDFRAC*.nc
+    nclist    = glob.glob(searchstr)
+    nclist.sort()
+    
+    ds_all    = xr.open_mfdataset(nclist,concat_dim="time",combine='nested')
+    ds_all    = hf.ds_dropvars(ds_all,keepvars)
+    ds_all    = hf.fix_febstart(ds_all)
+    
+    return ds_all
+    
+
 
 # import hfutils as hf
 
@@ -171,8 +202,6 @@ def ds_dropvars(ds,keepvars):
     ds = ds.drop(remvar)
     return ds
 
-
-
 def fix_febstart(ds):
     # Copied from preproc_CESM.py on 2022.11.15
     if ds.time.values[0].month != 1:
@@ -220,6 +249,7 @@ for vv in range(2):
     ds_all    = hf.ds_dropvars(ds_all,keepvars)
     ds_all    = hf.fix_febstart(ds_all)
     
+    
     # Load the Data
     st = time.time()
     ds_all = ds_all.load()
@@ -231,10 +261,15 @@ for vv in range(2):
 
 #%% Make the Mask (Should be universal for all models)
 
+st                  = time.time()
+# Crop time if optionis set
+if croptime:
+    print("Cropping time between %s and %s" % (tstart,tend))
+    maskvar = [ds.sel(time=slice(tstart,tend)) for ds in maskvar]
 landfrac,icefrac    = maskvar
 landthres,icethres  = mthres
 
-st                  = time.time()
+# Make the mask
 landmask,icemask    = make_limask(landfrac,icefrac,landthres,icethres)
 print("Computed mask in %.2fs" % (time.time()-st))
 
@@ -247,19 +282,19 @@ outnames            = ["landmask_%02ip" % (landthres*100),
 edict               = dict(mask=dict(zlib=True))
 for vv in range(3):
     outname = "%s%s_%s.nc" % (outpath,datname,outnames[vv])
+    if croptime:
+        outname = hf.addstrtoext(outname,"_%s" % timestr,adjust=-1)
     outputs[vv].to_netcdf(outname,encoding=edict)
-
-
 
 #%% ===========================================================================
 
-
-
-
 # For each variable: Load and apply LI Mask, Anomalize/Detrend, Combine Heat Fluxes
-maskname = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/cesm2_pic_limask_0.3p_0.05p.nc'
-mask     = xr.open_dataset(maskname).mask.load()
-
+#maskname = '/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/cesm2_pic_limask_0.3p_0.05p_0200to2000.nc'
+maskname = None
+if maskname is None:
+    mask = 1
+else:
+    mask     = xr.open_dataset(maskname).mask.load()
 
 nvars = len(anom_varnames)
 for vv in tqdm(range(nvars)):
@@ -303,9 +338,19 @@ for vv in tqdm(range(nvars)):
 #%% Compute Qnet
 # ------------ 0 ------------ 0 ------------ 0 ------------ 0 ------------ 0 --
 
-#
-
     
+
+
+
+# ------------------------------------------------------------------------------
+# %% Crop Variables to Selected Region
+# ------------------------------------------------------------------------------
+
+
+bbox_reg = [-100,20,]
+
+# Load in Variables
+
 
 
 

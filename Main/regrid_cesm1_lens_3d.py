@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 
-Regrid CESM1 LENs to a specified resolution
+Regrid 3d CESM1 LENs output (mostly for detrainment damping
+calculations)
+
+Copied format for regrid cesm1_lens
 
 Copy the following:
     - regrid_reanalysis_cesm1.py

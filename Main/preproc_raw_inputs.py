@@ -92,13 +92,13 @@ def load_cesm2_pic(vname,datpath=None,searchstr=None,debug=True):
 # Indicate Dataset
 datname           = "cesm2_pic"
 datpath           = "/stormtrack/data4/glliu/01_Data/CESM2_PiControl/FCM/atm/"
-vnames            = ["SHFLX","FSNS","FLNS","TS","LANDFRAC","ICEFRAC"]
+vnames            = ["ICEFRAC",]
 
 # Output Path
 outpath          = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/proc/"
 
 # Indicate Time Crop
-tstart            =  '0200-01-01' # "2006-01-01" # 
+tstart            =  '0000-01-01' # "2006-01-01" # 
 tend              =  '2000-12-31' #"2101-01-01" # 
 timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
 
@@ -135,7 +135,13 @@ for vv in range(nvars):
     
     # Crop to time
     ds_tcrop = ds_fmt.sel(time=slice(tstart,tend))
-    
+    times   = ds_tcrop.time.values
+    timestr1 = "%04ito%04i" % (times[0].year,times[-1].year)
+    if timestr != timestr1:
+        print("Cropped to %s. Renaming based on new timestr." % (timestr1))
+        timestr = timestr1
+        savename = "%s%s_%s_%s_%s.nc" % (outpath,datname,vname,bbox_name,timestr) # Maybe add simpler replace statement
+        
     # Crop to region
     ds_reg   = hf.sel_region_xr(ds_tcrop,bbox_crop)
     
