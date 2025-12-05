@@ -54,7 +54,7 @@ import glob
 
 #%% Import modules
 
-stormtrack = 1
+stormtrack = 0
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -104,7 +104,20 @@ if croptime_estimate:
     tcrop_fname      = "_%sto%s" % (tcrop_start.replace('-',''),tcrop_end.replace('-',''))
 
 # Detrend Method
-detrend           = 1 
+detrend           = "GMSSTmon" # Detrend Method
+# Set up check to support legacy detrending options
+old_detrend=False
+if type(detrend) == int:
+    old_detrend=True
+    detrend = str(detrend)
+"""
+Old Format: , 0 = remove ens avg, 1 = linear
+
+Update 2025.09.18
+    If lensflag=True, automatic remove ensemble average
+    otherwise: linear,linearmon,quadratic,quadraticmon,GMSST,GMSSTmon
+        
+"""
 
 # Variables and Dataset Name
 vnames_in         = ['TS','qnet'] # ["qnet","fsns","flns","lhflx","shflx"] #"TS" for historical data
@@ -151,6 +164,8 @@ ensorem  = True
 
 # Toggles
 debug    = False # Print Figures, statements for debugging
+
+
 
 #%% Main Body
 

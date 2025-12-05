@@ -87,6 +87,53 @@ ensonc            = "CESM2_FOM_ENSO_detrend1_pcs3_0200to2000.nc"
 lensflag          = False#True
 nens              = 1 #42
 
+
+# =============================================================================
+# ERA5 (Qnet, 1948 to 2007 NAtl)
+# =============================================================================
+device             = "Astraeus"
+datpath            = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
+
+# OAFLUX Test Calculation (Qnet, 1948 to 2007, Global) ========================
+calcname            = "ERA5" 
+lonname             = 'lon'
+latname             = 'lat'
+tname               = 'time' 
+
+# Indicate Input Time Crop (for input)
+croptime          =   True
+tstart            =  '1979-01-01'
+tend              =  '2024-12-31'
+timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
+
+# Indicate HFF calculation crop
+croptime_estimate = False # Cut time right before estimating the heat flux feedback
+tstart            =  '1979-01-01'
+tend              =  '2024-12-31'
+tcrop_fname       = ""
+if croptime_estimate:
+    tcrop_fname   = "_%sto%s" % (tstart[:4].replace('-',''),tend[:4].replace('-',''))
+
+# Indicate bbox crop information
+bbox_name         = "NAtl"
+
+# Variables Information  -----
+
+# SST 
+sstname           = "sst"
+sstnc             = "ERA5_sst_NAtl_1979to2024.nc"
+sstpath           = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
+
+# Heat Flux
+flxname           = "qnet"
+flxnc             = "ERA5_qnet_NAtl_1979to2024.nc"
+flxpath           = sstpath
+varlnames         = "Net Heat Flux Damping"
+
+# Enso Information
+ensonc            = "ERA5_ensotest_ENSO_detrend%s_pcs3_1979to2024.nc" % detrend
+
+
 #%% Import Packages
 if device == "Astraeus":
 
@@ -110,7 +157,17 @@ import amv.loaders as dl
 #%% Options for each calculation step
 
 # Step 1 (Preprocessing)
-detrend           = 1  # Detrend Method, 0 = remove ens avg, 1 = linear
+detrend           = "linearmon" # Detrend Method
+
+"""
+Old Format: , 0 = remove ens avg, 1 = linear
+
+Update 2025.09.18
+    If lensflag=True, automatic remove ensemble average
+    otherwise: linear,linearmon,quadratic,quadraticmon,GMSST,GMSSTmon
+        
+"""
+
     
 # Step 2 (Remove ENSO)
 pcrem             = 3    # PCs calculated
@@ -120,6 +177,17 @@ monwin            = 3    # Window of months to consider
 
 # Step 3 (HFF Calculation)
 ensorem           = True # Set to False to skip ENSO removal step
+
+#%% Load GMSST for detrending (note that this must be manually entered...)
+
+# Load GMSST
+dpath_gmsst = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
+nc_gmsst    = "ERA5_GMSST_1979_2024.nc"
+ds_gmsst    = xr.open_dataset(
+    dpath_gmsst + nc_gmsst).load()  # .GMSST_MeanIce.load()
+
+
+
 
 #%% Additional Toggles
 
@@ -152,6 +220,13 @@ st_script = time.time()
 vnames_in = [sstname,flxname]
 ncs_in    = [sstpath+sstnc,flxpath+flxnc]
 
+# Set up check to support legacy detrending options
+old_detrend=False
+if type(detrend) == int:
+    old_detrend=True
+    detrend = str(detrend)
+
+
 # # Load the data
 # ds_all    = [xr.open_dataset(ncs_in[vv])[vnames_in[vv]].load() for vv in range(2)]
 
@@ -165,7 +240,7 @@ ncs_in    = [sstpath+sstnc,flxpath+flxnc]
 # in: sst, flux with [lonname,latname,timename]
 # out" sstanome: [time x lat x lon]
 print("(Step 1.) Calculating Anomalies...")
-def preprocess_ds(ds,tstart,tend,detrend):
+def preprocess_ds(ds,tstart,tend,detrend,vname):
     # Fix February Start (for CESM1 Output)
     try:
         ds = hf.fix_febstart(ds)
@@ -180,10 +255,26 @@ def preprocess_ds(ds,tstart,tend,detrend):
     dsa   = hf.xrdeseason(ds)
     
     # Detrend ----------------
-    if detrend == 0:
+    if lensflag:
         dsadt = dsa - dsa.mean('ens')
+    elif detrend == "linear" or detrend == "1": # (1): Simple Linear Detrend (9.68s)
+        dsadt    = hf.xrdetrend(dsa)
+    elif detrend == "linearmon":
+        dsadt    = hf.xrdetrend_nd(dsa,1,return_fit=False,regress_monthly=True)
+    elif detrend == 'quadratic':
+        dsadt    = hf.xrdetrend_nd(dsa,2,return_fit=False)
+    elif detrend == "quadraticmon":
+        dsadt  = hf.xrdetrend_nd(dsa,2,return_fit=False,regress_monthly=True)
+    elif detrend == "GMSST":
+        # (3): Removing GMSST
+        gmout       = hf.detrend_by_regression(dsa,ds_gmsst.GMSST_MeanIce)
+        dsadt        = gmout[vname]
+    elif detrend == "GMSSTmon":
+        gmoutmon    = hf.detrend_by_regression(dsa,ds_gmsst.GMSST_MeanIce,regress_monthly=True)
+        dsadt        = gmoutmon[vname]
     else:
-        dsadt = hf.xrdetrend(dsa,verbose=False)
+        print("No detrending will be performed...")
+            
     dsadt = dsadt.transpose('time','lat','lon')
     return dsadt 
 
@@ -199,9 +290,11 @@ ds_anoms = []
 for vv in range(2):
     
     vname         = vnames_in[vv]
-    savename_anom = "%s%s_%s_manom_%s_%s_detrend%0i.nc" % (anompath,calcname,vname,bbox_name,timestr,detrend)
+    savename_anom = "%s%s_%s_manom_%s_%s_detrend%s.nc" % (anompath,calcname,vname,bbox_name,timestr,detrend)
+    
     # Check to see if it exists
     check = check_exist(savename_anom,overwrite)
+    
     if check:
         print("\tSkipping anomalize step... File found: %s"  % savename_anom)
         dsa = xr.open_dataset(savename_anom)[vnames_in[vv]].load()
@@ -214,7 +307,7 @@ for vv in range(2):
         
         
         
-        dsa   = preprocess_ds(ds_in,tstart,tend,detrend)
+        dsa   = preprocess_ds(ds_in,tstart,tend,detrend,vname)
         edict = {vname:{'zlib':True}}
         dsa.to_netcdf(savename_anom,encoding=edict)
         print("\t\tSaved File to %s..." % savename_anom)
@@ -241,7 +334,7 @@ for vv in range(2):
     
     # Check if (ENSO index file) already exists, and skip if so.
     # ex. cesm2_pic_qnet_NAtl_0200to2000_detrend1_ENSOrem_lag1_pcs3_monwin3.nc
-    savename_ensorem = "%s%s_%s_%s_%s_detrend%i_ENSOrem_lag%i_pcs%i_monwin%i.nc" % (anompath,calcname,vname,
+    savename_ensorem = "%s%s_%s_%s_%s_detrend%s_ENSOrem_lag%i_pcs%i_monwin%i.nc" % (anompath,calcname,vname,
                                                                                 bbox_name,timestr,
                                                                                 detrend,ensolag,pcrem,monwin)
     
@@ -276,7 +369,7 @@ for vv in range(2):
         da_ensorem = hf.numpy_to_da(vout,times,lat,lon,vname,savenetcdf=savename_ensorem)
         
         # Save ENSO component
-        savename_ensocomp = "%s%s_%s_detrend%i_ENSOcmp_lag%i_pcs%i_monwin%i_%s.nc" % (ensopath,calcname,vname,detrend,ensolag,pcrem,monwin,timestr)
+        savename_ensocomp = "%s%s_%s_detrend%s_ENSOcmp_lag%i_pcs%i_monwin%i_%s.nc" % (ensopath,calcname,vname,detrend,ensolag,pcrem,monwin,timestr)
         coords_ensocomp   = dict(mon=np.arange(1,13,1),lat=lat,lon=lon,pc=np.arange(1,pcrem+1))
         da_ensocomp = xr.DataArray(ensopattern,coords=coords_ensocomp,dims=coords_ensocomp,name=vname)
         edict = {vname:{'zlib':True}}
@@ -327,7 +420,7 @@ damping,autocorr,crosscorr,autocov,cov = hf.calc_HF(sst,flx,[1,2,3],3,verbose=Tr
 # Save heat flux (from hfdamping_mat2nc.py)
 # ----------------------------------------
 outvars  = [damping,crosscorr,autocorr,cov,autocov]
-savename = "%s%s_%s_damping_%s_%s_ensorem%i_detrend%i.nc" % (hffpath,calcname,flxname,
+savename = "%s%s_%s_damping_%s_%s_ensorem%i_detrend%s.nc" % (hffpath,calcname,flxname,
                                                                        bbox_name,timestr,
                                                                        ensorem,detrend)
 if croptime_estimate:

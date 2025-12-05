@@ -10,6 +10,55 @@ Created on Thu Jul  3 17:06:23 2025
 
 """
 
+
+# =============================================================================
+# ERA5 (Qnet, 1948 to 2007 NAtl)
+# =============================================================================
+device             = "Astraeus"
+datpath            = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
+
+# OAFLUX Test Calculation (Qnet, 1948 to 2007, Global) ========================
+calcname            = "ERA5" 
+lonname             = 'lon'
+latname             = 'lat'
+tname               = 'time' 
+
+# Indicate Input Time Crop (for input)
+croptime          =   True
+tstart            =  '1979-01-01'
+tend              =  '2024-12-31'
+timestr           =  '%sto%s'  % (tstart[:4],tend[:4]) # ex. 0000to2000
+
+# Indicate HFF calculation crop
+croptime_estimate = False # Cut time right before estimating the heat flux feedback
+tstart            =  '1979-01-01'
+tend              =  '2024-12-31'
+tcrop_fname       = ""
+if croptime_estimate:
+    tcrop_fname   = "_%sto%s" % (tstart[:4].replace('-',''),tend[:4].replace('-',''))
+
+# Indicate bbox crop information
+bbox_name         = "NAtl
+
+# Variables Information  -----
+
+# SST 
+sstname           = "sst"
+sstnc             = "ERA5_sst_NAtl_1979to2024.nc"
+sstpath           = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
+
+# Heat Flux
+flxname           = "qnet"
+flxnc             = "ERA5_sst_NAtl_1979to2024.nc"
+flxpath           = sstpath
+varlnames         = "Net Heat Flux Damping"
+
+# Enso Information
+ensonc            = "ERA5_ensotest_ENSO_detrendGMSSTmon_pcs3_1979to2024.nc"
+
+
+
+#%%
 # =============================================================================
 # OAFLUX (Qnet, 1948 to 2007 Global)
 # =============================================================================

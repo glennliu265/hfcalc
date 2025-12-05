@@ -38,7 +38,9 @@ import glob
 import pandas as pd
 
 #%% Import modules
-stormtrack = 1
+
+stormtrack = 0
+
 if stormtrack:
     sys.path.append("/home/glliu/00_Scripts/01_Projects/00_Commons/")
     sys.path.append("/home/glliu/00_Scripts/01_Projects/01_AMV/02_stochmod/stochmod/model/")
@@ -69,8 +71,8 @@ import amv.proc as hf # Update hf with actual hfutils script, most relevant func
 # timestr           = "%sto%s" % (tstart[:4],tend[:4])
 
 # ENSO Parameters
-pcrem             = 3                   # PCs to calculate
-bbox              = [120, 290, -20, 20] # ENSO Bounding Box
+pcrem            = 3                   # PCs to calculate
+bbox             = [120, 290, -20, 20] # ENSO Bounding Box
 
 # Toggles and Options
 overwrite        = True # Set to True to overwrite existing output...
@@ -98,8 +100,6 @@ outpath             = ""#"/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfda
 maskpath            = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/masks/"
 maskname            = 'cesm1_htr_5degbilinear_limask_0.3p_0.05p_year1920to2005_enssum.nc'#"cesm2_pic_limask_0.3p_0.05p.nc"
 
-
-
 # NOAA OISST
 dataset_name        = 'OISST'#"cesm2_pic"
 datpath             = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/NATL_proc_obs/"
@@ -110,7 +110,7 @@ timename            = "time"
 concat_dim          = None#"time"
 keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
-detrend             = 1 # 1 to remove linear trend 
+#detrend             = 1 # 1 to remove linear trend 
 outpath             = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/reanalysis/proc/"
 
 
@@ -124,7 +124,7 @@ timename            = "time"
 concat_dim          = None#"time"
 keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
-detrend             = 1 # 1 to remove linear trend 
+#detrend             = 1 # 1 to remove linear trend 
 outpath             = ""
 yr_range            = "1979to2024" # Other topin is 1979to2021
 
@@ -138,7 +138,7 @@ timename            = "time"
 concat_dim          = None#"time"
 keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
-detrend             = 1 # 1 to remove linear trend 
+#detrend             = 1 # 1 to remove linear trend 
 outpath             = "/Users/gliu/Downloads/02_Research/01_Projects/01_AMV/01_hfdamping/01_Data/enso/"
 #yr_range            = "1984to2007" # Other topin is 1979to2021
 croptime            = True # Cut the time prior to detrending, EOF, etc
@@ -157,7 +157,7 @@ timename            = "time"
 concat_dim          = "time"
 keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
-detrend             = 1 # 1 to remove linear trend 
+#detrend             = 1 # 1 to remove linear trend 
 outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/enso/"
 #yr_range            = "1984to2007" # Other topin is 1979to2021
 croptime            = True # Cut the time prior to detrending, EOF, etc
@@ -176,7 +176,7 @@ yr_range            = timestr
 # concat_dim          = "time"
 # keepvars            = [timename,latname,lonname,vname]
 # ensnum              = 1 # Irrelevant for now, need to add ensemble support...
-# detrend             = 1 # 1 to remove linear trend 
+## detrend             = 1 # 1 to remove linear trend 
 # outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/enso/"
 # #yr_range            = "1984to2007" # Other topin is 1979to2021
 # croptime            = True # Cut the time prior to detrending, EOF, etc
@@ -195,7 +195,7 @@ timename            = "time"
 concat_dim          = "time"
 keepvars            = [timename,latname,lonname,vname]
 ensnum              = 1 # Irrelevant for now, need to add ensemble support...
-detrend             = 1 # 1 to remove linear trend 
+#detrend             = 1 # 1 to remove linear trend 
 outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/enso/"
 #yr_range            = "1984to2007" # Other topin is 1979to2021
 croptime            = True # Cut the time prior to detrending, EOF, etc
@@ -204,10 +204,47 @@ tend                = '0500-12-31'
 timestr             = "%sto%s" % (tstart[:4],tend[:4])
 yr_range            = timestr
 
+# ERA5 with Monthly GMSST Removal
+# Note: See the compute_enso_index_ERA5 script... I ended up doing the calculations there..
+# Tried to modify this script accordingly but will have to test later...
+
+# outpath             = "/stormtrack/data3/glliu/01_Data/02_AMV_Project/01_hfdamping/output/enso/"
+# #yr_range            = "1984to2007" # Other topin is 1979to2021
+# croptime            = True # Cut the time prior to detrending, EOF, etc
+# tstart              = '0100-01-01' 
+# tend                = '0500-12-31'
+# timestr             = "%sto%s" % (tstart[:4],tend[:4])
+# yr_range            = timestr
+
+
 # Mask Information (first run a maskmaker script/section such as that in preproc_CESM2_PiControl.py)
 maskpath            = None
 maskname            = None
 
+
+# Detrend Method
+detrend           = "GMSSTmon" # Detrend Method
+# Set up check to support legacy detrending options
+old_detrend=False
+if type(detrend) == int:
+    old_detrend=True
+    detrend = str(detrend)
+"""
+Old Format: , 0 = remove ens avg, 1 = linear
+
+Update 2025.09.18
+    If lensflag=True, automatic remove ensemble average
+    otherwise: linear,linearmon,quadratic,quadraticmon,GMSST,GMSSTmon
+        
+"""
+
+#%% Load GMSST for detrending (note that this must be manually entered...)
+
+# Load GMSST
+dpath_gmsst = "/Users/gliu/Downloads/02_Research/01_Projects/05_SMIO/01_Data/"
+nc_gmsst    = "ERA5_GMSST_1979_2024.nc"
+ds_gmsst    = xr.open_dataset(
+    dpath_gmsst + nc_gmsst).load()  # .GMSST_MeanIce.load()
 
 
 #%% Find File and Load Variable
@@ -308,14 +345,33 @@ if detrend:
         da = da.transpose('ens','time','lat','lon')
         
     else:
-        print("Detrending by removing linear fit")
-        ds_anom   = ds_anom.transpose('time','lat','lon')
+        if detrend == "linear" or detrend == "1": # (1): Simple Linear Detrend (9.68s)
+            da    = hf.xrdetrend(da)
+        elif detrend == "linearmon":
+            da    = hf.xrdetrend_nd(da,1,return_fit=False,regress_monthly=True)
+        elif detrend == 'quadratic':
+            da    = hf.xrdetrend_nd(da,2,return_fit=False)
+        elif detrend == "quadraticmon":
+            da  = hf.xrdetrend_nd(da,2,return_fit=False,regress_monthly=True)
+        elif detrend == "GMSST":
+            # (3): Removing GMSST
+            gmout       = hf.detrend_by_regression(da,ds_gmsst.GMSST_MeanIce)
+            da        = gmout[vname]
+        elif detrend == "GMSSTmon":
+            gmoutmon    = hf.detrend_by_regression(da,ds_gmsst.GMSST_MeanIce,regress_monthly=True)
+            da        = gmoutmon[vname]
+        else:
+            print("No detrending will be performed...")
+            
         
-        # Simple Linear Detrend
-        dt_dict   = hf.detrend_dim(ds_anom.values,0,return_dict=True)# ASSUME TIME in first axis
+        # print("Detrending by removing linear fit")
+        # ds_anom   = ds_anom.transpose('time','lat','lon')
         
-        # Put back into DataArray
-        da = xr.DataArray(dt_dict['detrended_var'],dims=ds_anom.dims,coords=ds_anom.coords,name=vname)
+        # # Simple Linear Detrend
+        # dt_dict   = hf.detrend_dim(ds_anom.values,0,return_dict=True)# ASSUME TIME in first axis
+        
+        # # Put back into DataArray
+        # da = xr.DataArray(dt_dict['detrended_var'],dims=ds_anom.dims,coords=ds_anom.coords,name=vname)
 
 else:
     da = ds_anom.copy()
